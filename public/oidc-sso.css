@@ -1,0 +1,33 @@
+/*
+ * Author: MoyuZJ
+ * Team: LinearTeam
+ * Contact: linearteam@foxmail.com
+ * Made by MoyuZJ in China with ♥
+ */
+
+/* ---------- 登录页 SSO 按钮（注入 .auth） ---------- */
+.sso-divider{display:flex;align-items:center;gap:12px;margin:24px 0 12px;color:#52606d;font-size:12px}.sso-divider::before,.sso-divider::after{content:'';flex:1;height:1px;background:#d8dadd}.sso-login-buttons{display:grid;gap:10px;margin-bottom:22px}.sso-login-button{display:block;text-align:center;padding:11px 14px;border:1px solid #8c969f;border-radius:5px;color:#1d2327;background:#fff;text-decoration:none;font-size:13px;transition:border-color .15s,background .15s}.sso-login-button:hover{border-color:#315bea;color:#315bea;background:#f5f7ff}
+
+/* ---------- 绑定面板（资料编辑页 / 仪表盘注入） ---------- */
+.sso-bind-panel{margin:22px 0;padding:18px 20px;border:1px solid #c7cdd3;background:#fff}.sso-bind-title{margin:0 0 12px;font:600 14px Arial,sans-serif;color:#1d2327}.sso-bind-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid #e6e9ec}.sso-bind-name{font-weight:bold;font-size:13px;color:#33404b}.sso-bind-state{font-size:12px;color:#63707c}.sso-bind-row form{margin-left:auto}.sso-bind-row button{border:1px solid #315bea;color:#315bea;background:#fff;padding:7px 14px;font-size:12px;cursor:pointer}.sso-bind-row .sso-bind-unbind{border-color:#b32d2e;color:#b32d2e}.sso-bind-row button:hover{background:#f1f4fd}.sso-bind-row .sso-bind-unbind:hover{background:#fdf1f1}.sso-bind-empty{color:#737b83;font-size:12px;margin:8px 0}.sso-bind-hint{margin:12px 0 0;color:#8a9199;font-size:11px}
+
+/* ---------- 创建账户确认页 ---------- */
+.sso-auth{max-width:440px;margin:60px auto;padding:34px;background:#fff;border:1px solid #d8dadd;box-shadow:0 1px 2px rgba(0,0,0,.04)}.sso-auth h1{margin:8px 0 18px;font:400 34px Georgia,serif}.sso-auth .sso-create-note{font-size:14px;line-height:1.8;color:#33404b;margin:0 0 8px}.sso-auth .sso-create-note b{color:#1d2327}.sso-auth code{background:#f1f4f6;padding:1px 5px;border-radius:3px;font-size:12px}.sso-create-fields{display:grid;gap:12px;margin:20px 0 22px}.sso-create-fields label{display:grid;gap:6px;font-size:12px;color:#59636d}.sso-create-fields input{width:100%;padding:10px 12px;border:1px solid #8c969f;background:#f6f7f8;font:13px Arial,sans-serif}.sso-create-fields small{line-height:1.6;color:#8a9199}.sso-create-actions{display:flex;align-items:center;gap:14px}.sso-create-actions .sso-ghost{color:#315bea;text-decoration:none;font-size:13px}.sso-create-actions .sso-ghost:hover{text-decoration:underline}
+
+/* ---------- 设置页（管理后台） ---------- */
+.sso-notice{margin:0 0 16px;padding:11px 14px;border:1px solid #9fd0a0;background:#eef8ee;color:#227442;font-size:13px}
+.sso-panel{margin:0 0 18px;padding:20px 22px;border:1px solid #c7cdd3;background:#fff;max-width:860px}
+.sso-panel h2{margin:0 0 14px;font:600 15px Arial,sans-serif;color:#1d2327}
+.sso-desc{margin:0 0 14px;font-size:12px;line-height:1.7;color:#59636d}
+.sso-field{display:grid;gap:7px;margin:0 0 14px;font-size:12px;color:#59636d}
+.sso-field input[type=text],.sso-field input:not([type=checkbox]),.sso-field input[type=url],.sso-field textarea{width:100%;min-width:0;padding:10px 12px;border:1px solid #8c969f;background:#fff;font:13px Arial,sans-serif}
+.sso-field textarea{font:12px/1.6 Consolas,monospace;resize:vertical}
+.sso-field small{line-height:1.7;color:#8a9199}
+.sso-field code,.sso-desc code,.sso-panel code{background:#f1f4f6;padding:1px 5px;border-radius:3px;font-size:12px}
+.sso-checkbox{display:flex;align-items:flex-start;gap:10px;flex-direction:row;font-size:13px;color:#1d2327}.sso-checkbox input{margin-top:3px;accent-color:#315bea}.sso-checkbox small{width:100%;font-size:12px;color:#8a9199;line-height:1.7}
+.sso-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}
+.sso-actions{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+.sso-plain{border:1px solid #315bea;color:#315bea;background:#fff;padding:9px 14px;font-size:12px;cursor:pointer}
+.sso-plain:hover{background:#f1f4fd}
+.sso-save{border:0;background:#315bea;color:#fff;padding:12px 22px;font-size:13px;cursor:pointer}
+@media(max-width:700px){.sso-grid{grid-template-columns:1fr}.sso-auth{margin:30px auto;padding:22px}}

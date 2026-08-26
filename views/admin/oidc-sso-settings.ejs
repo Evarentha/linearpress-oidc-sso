@@ -1,0 +1,47 @@
+<!--
+  Author: MoyuZJ
+  Team: LinearTeam
+  Contact: linearteam@foxmail.com
+  Made by MoyuZJ in China with ♥
+-->
+<section class="page-head"><p class="eyebrow">AUTH / SINGLE SIGN-ON</p><h1>OIDC 单点登录</h1></section>
+<% if (typeof notice !== 'undefined' && notice) { %><div class="sso-notice"><%= notice %></div><% } %>
+
+<form method="post" action="/admin/oidc-sso/settings/save" data-sso-settings>
+  <div class="sso-panel">
+    <h2>通用设置</h2>
+    <label class="sso-field">回调路径
+      <input name="callback_path" value="<%= config.callbackPath %>" placeholder="/sso-callback" data-sso-callback-path>
+      <small>在认证平台后台填写的回调地址为：<code data-sso-callback-url><%= callbackOrigin %><%= config.callbackPath %></code>。修改后需重启站点生效。</small>
+    </label>
+    <label class="sso-field sso-checkbox"><input type="checkbox" name="auto_register" <%= config.autoRegister ? 'checked' : '' %>> 允许未注册用户自动注册
+      <small>开启后，未绑定任何站点账户的平台账号会先询问是否创建账户（用户名/邮箱取自平台，重名自动追加 <code>_openid</code> 后四位）；关闭后不再询问，仅允许已绑定用户登录。</small>
+    </label>
+  </div>
+
+  <div class="sso-panel">
+    <h2>认证平台（可添加任意 OAuth2 / OIDC）</h2>
+    <p class="sso-desc">以 JSON 数组管理平台。每个平台需配置 client_id/secret、授权地址、令牌地址与用户信息地址；用户名/邮箱/唯一标识字段名可按平台响应自定义。未启用（enabled: false）的平台不展示、不参与登录。</p>
+    <div class="sso-actions">
+      <button type="button" data-sso-insert="oidc" class="sso-plain">插入 OIDC 模板</button>
+      <button type="button" data-sso-insert="oauth2" class="sso-plain">插入 OAuth2 模板</button>
+    </div>
+    <label class="sso-field">providers JSON
+      <textarea name="providers_json" rows="14" spellcheck="false" data-sso-providers-json><%= providersJson %></textarea>
+    </label>
+  </div>
+
+  <div class="sso-panel">
+    <h2>OIDC Discovery 自动填充</h2>
+    <p class="sso-desc">填写平台的 OpenID Configuration 文档地址（如 <code>https://idp.example.com/.well-known/openid-configuration</code>）与客户端凭据，可一键生成平台配置并追加到上方 JSON。</p>
+    <div class="sso-grid">
+      <label class="sso-field">Discovery 地址<input name="discovery_url" data-sso-discovery-url placeholder="https://…/.well-known/openid-configuration"></label>
+      <label class="sso-field">平台名称（可选）<input name="discovery_name" data-sso-discovery-name placeholder="例如：企业统一认证"></label>
+      <label class="sso-field">Client ID<input name="discovery_client_id" data-sso-discovery-cid></label>
+      <label class="sso-field">Client Secret<input name="discovery_client_secret" data-sso-discovery-secret></label>
+    </div>
+    <div class="sso-actions"><button type="button" class="sso-plain" data-sso-discovery>从 Discovery 生成并追加</button><span data-sso-discovery-status></span></div>
+  </div>
+
+  <button class="sso-save" type="submit">保存设置</button>
+</form>
