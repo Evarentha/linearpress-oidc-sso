@@ -38,7 +38,7 @@
 cd base && sh scripts/sync-plugins.sh oidc-sso
 
 # Option 2 — clone into runtime dir（目录名必须等于插件 id）
-git clone https://github.com/Averithen/linearpress-oidc-sso src/plugins/oidc-sso
+git clone https://github.com/Evarentha/linearpress-oidc-sso src/plugins/oidc-sso
 ```
 
 ## Configure a Provider / 配置一个平台（example / 示例）
@@ -52,7 +52,7 @@ providers JSON fields：`id / name / icon / enabled / type(oidc|oauth2) / client
 ## Local Development / 本地开发：怎么拉 / 怎么改 / 怎么跑
 
 ```bash
-git clone https://github.com/Averithen/linearpress-oidc-sso LinearPress/Plugins/oidc-sso
+git clone https://github.com/Evarentha/linearpress-oidc-sso LinearPress/Plugins/oidc-sso
 cd LinearPress/base
 npm install && npm run db:init
 sh scripts/sync-plugins.sh oidc-sso
