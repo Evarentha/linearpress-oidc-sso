@@ -5,76 +5,77 @@
   Made by MoyuZJ in China with ♥
 -->
 
-# OIDC 单点登录（oidc-sso）
+# OIDC 单点登录 · OIDC SSO
 
-为 LinearPress 提供基于 **OIDC / OAuth2（Authorization Code）** 的单点登录：
-可自定义添加任意兼容的认证平台（学校/企业统一身份、GitHub、GitLab、Keycloak、Authing、Okta、Azure AD 等），
-登录页顶部自动出现平台登录按钮。
+**OIDC / OAuth2 (Authorization Code)** single sign-on for LinearPress：add any compliant provider（university/enterprise IdP、GitHub、GitLab、Keycloak、Authing、Okta、Azure AD…）；provider buttons appear at the top of the login page.
 
-> 本仓库是 LinearPress 插件 **oidc-sso** 的独立开发仓库。插件即 Cordis 插件函数，即插即用、可停用可卸载。
-> 依赖：无（Node 24 内置 `fetch` / `crypto`）。
+为 LinearPress 提供基于 **OIDC / OAuth2（Authorization Code）** 的单点登录：可自定义添加任意兼容的认证平台（学校/企业统一身份、GitHub、GitLab、Keycloak、Authing、Okta、Azure AD 等），登录页顶部自动出现平台登录按钮。
 
-## 插件化的优势
+> Independent plugin repository for LinearPress **oidc-sso**. Dependencies：none（Node 24 built-in `fetch`/`crypto`）.
+> 本仓库是 LinearPress 插件 **oidc-sso** 的独立仓库。
 
-- **认证外置不改核心**：SSO 走独立回调路由（GET），不经 `/login`，与 easy-captcha 的人机验证全程不冲突（SSO 登录不经过人机验证）。
-- **两处绑定入口**：装 colorful-profiles 时在个人资料编辑页绑定/解绑，否则在仪表盘操作——靠 Hook 挂载，双方都不用改代码。
-- **自动注册可控**：未绑定平台账号默认在登录时询问是否创建账户（可关闭仅允许已绑定登录），用户体系零冲突。
+## Why Plugins? / 插件化的优势
 
-## 功能
+- **Auth externalized, core untouched** —— SSO uses its own callback route（GET），never passing through `/login`；no interaction with easy-captcha（SSO login skips captcha）.
+  **认证外置不改核心**——SSO 走独立回调路由，与人机验证全程不冲突。
+- **Two binding entry points** —— profile edit page（colorful-profiles installed）or dashboard — via hooks，neither side changes code.
+  **两处绑定入口**——靠 Hook 挂载，双方零改码。
+- **Controlled auto-registration** —— by default asks before creating an account（can be limited to existing users only）.
+  **自动注册可控**。
 
-1. **自定义认证平台**：填 client_id/secret、授权/令牌/用户信息地址与字段映射即可；支持 **OIDC Discovery** 一键自动填充（填 `.well-known/openid-configuration`）。
-2. **回调地址可配置**：默认 `/sso-callback`（修改后需重启）。
-3. **登录按钮**：登录页**上方**注入平台登录按钮；未配置平台时不显示。
-4. **自动注册/绑定**：用户名已存在自动追加 `_openid` + openid 后四位；用户名安全化（仅字母/数字/下划线/连字符，短名补齐，冲突继续 `-2/-3`）。
-5. **绑定/解绑**：个人资料编辑页或仪表盘。
+## Features / 功能
 
-## 安装
+1. **Custom providers / 自定义平台**：client_id/secret、authorize/token/userinfo URLs & field mapping；**OIDC Discovery** one-click autofill（paste the `.well-known/openid-configuration` URL）.
+2. **Configurable callback** / 回调地址可配置：default `/sso-callback`（change requires restart）.
+3. **Login buttons / 登录按钮**：injected at the top of the login page；hidden when no provider configured.
+4. **Auto-register / auto-bind / 自动注册与绑定**：conflict usernames get `_openid` + suffix；sanitized usernames（alphanumeric/_/-；short names padded；`-2/-3` on further collisions）.
+5. **Bind / unbind / 绑定与解绑**：profile edit or dashboard.
+
+## Install / 安装
 
 ```bash
-# 方式一：工作区同步
+# Option 1 — workspace sync（工作区同步）
 cd base && sh scripts/sync-plugins.sh oidc-sso
 
-# 方式二：克隆到运行目录（目录名必须等于插件 id）
-git clone <本仓库地址> src/plugins/oidc-sso
+# Option 2 — clone into runtime dir（目录名必须等于插件 id）
+git clone https://github.com/Averithen/linearpress-oidc-sso src/plugins/oidc-sso
 ```
 
-启用后进入后台「单点登录」菜单配置平台。
+## Configure a Provider / 配置一个平台（example / 示例）
 
-## 配置一个平台（示例：任意 OIDC）
+1. Create an app in the IdP with callback `https://你的站点/<回调路径>`（default `/sso-callback`）.
+2. Admin → 「单点登录」：fill Discovery URL + Client ID/Secret → "Generate & append from Discovery"；or paste an OIDC/OAuth2 template and edit.
+3. Save；the login page shows「通过 平台名 登录」.
 
-1. 在认证平台创建应用，回调地址填 `https://你的站点/<回调路径>`（默认 `/sso-callback`）。
-2. 后台「单点登录」：填写 Discovery 地址与 Client ID / Secret →「从 Discovery 生成并追加」；或手动插入 OIDC/OAuth2 模板编辑。
-3. 保存即可，登录页顶部出现「通过 平台名 登录」。
+providers JSON fields：`id / name / icon / enabled / type(oidc|oauth2) / clientId / clientSecret / scope / authorizeUrl / tokenUrl / userInfoUrl / idField(sub) / usernameField / emailField / usePkce`.
 
-providers JSON 关键字段：`id / name / icon / enabled / type(oidc|oauth2) / clientId / clientSecret / scope / authorizeUrl / tokenUrl / userInfoUrl / idField(sub) / usernameField / emailField / usePkce`。
-
-## 本地开发：怎么拉 / 怎么改 / 怎么跑
+## Local Development / 本地开发：怎么拉 / 怎么改 / 怎么跑
 
 ```bash
-git clone <本仓库地址> LinearPress/Plugins/oidc-sso
+git clone https://github.com/Averithen/linearpress-oidc-sso LinearPress/Plugins/oidc-sso
 cd LinearPress/base
 npm install && npm run db:init
 sh scripts/sync-plugins.sh oidc-sso
 npm run dev
 ```
 
-## 目录结构
+## Directory / 目录结构
 
 ```text
 oidc-sso/
-├── plugin.json            # Manifest
-├── index.ts               # 入口：SSO 回调、绑定/解绑、登录按钮注入
+├── plugin.json            Manifest
+├── index.ts               entry：callback, bind/unbind, login button injection
 ├── src/
-│   ├── config.ts          # providers 配置模型
-│   ├── oauth.ts           # OIDC/OAuth2 流程 + Discovery
-│   └── store.ts           # 绑定关系存储
-├── views/                 # 登录页按钮注入、后台设置页
-├── public/                # 前端脚本与样式
+│   ├── config.ts          providers config model
+│   ├── oauth.ts           OIDC/OAuth2 flow + Discovery
+│   └── store.ts           bindings storage
+├── views/                 login-page injection & admin settings
+├── public/                front-end script & styles
 └── types/session.d.ts
 ```
 
-## 贡献与发布
+## Contribute & Release / 贡献与发布
 
-- conventional commits；提交前 `cd base && npm run typecheck`
-- 版本：`git tag v1.0.0 && git push --tags`
-- License：MIT（见仓库 LICENSE）
+- conventional commits；`cd base && npm run typecheck` before commit
+- Version：`git tag v1.0.0 && git push --tags`
+- License：MIT（LICENSE）
