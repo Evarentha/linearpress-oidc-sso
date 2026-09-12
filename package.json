@@ -1,8 +1,32 @@
 {
-  "name": "oidc-sso",
-  "version": "1.0.0",
-  "private": true,
-  "description": "LinearPress OIDC/OAuth2 单点登录插件：多平台自定义、自动注册、账号绑定",
+  "name": "@evarentha/linearpress-oidc-sso",
+  "version": "3.0.0",
+  "license": "GPL-3.0-or-later",
+  "description": "OIDC / OAuth2 单点登录：可自定义添加任意 OAuth2 或 OIDC 认证平台（含 Discovery 自动填充），回调地址可配置（默认 /sso-callback），支持未注册用户自动注册（重名用户名追加 _openid 后四位，可关闭），已登录用户可在个人资料（colorful-profiles）或仪表盘绑定/解绑平台账号。",
   "type": "module",
-  "main": "index.ts"
+  "main": "index.ts",
+  "author": "MoyuZJ <moyuzj@moyuzj.cn> (https://moyuzj.cn)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Evarentha/linearpress-oidc-sso.git"
+  },
+  "keywords": [
+    "linearpress",
+    "plugin",
+    "evarentha",
+    "oidc-sso"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "peerDependencies": {
+    "linearpress": "^3.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://github.com/Evarentha/linearpress-oidc-sso#readme",
+  "bugs": {
+    "url": "https://github.com/Evarentha/linearpress-oidc-sso/issues"
+  }
 }
