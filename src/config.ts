@@ -1,17 +1,26 @@
 /*
- * Author: MoyuZJ
- * Team: LinearTeam
- * Contact: linearteam@foxmail.com
- * Made by MoyuZJ in China with ♥
+ * Single Sign-On Configuration Model
+ *
+ * Types, defaults, validation, and settings-form parsing for the SSO
+ * plugin, stored as JSON in the plugin registry.
+ *
+ * Authors:
+ * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ *
+ * Copyright (C) 2026 Evarentha
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 /**
- * OIDC/OAuth2 单点登录插件配置模型。
+ * Configuration model for the OIDC / OAuth2 single sign-on plugin.
  *
- * 配置整体以 JSON 保存在插件注册表（ctx.plugins.getConfig/setConfig），
- * 提供默认值 + 浅层合并（与 easy-captcha / advanced-user-management 一致）。
- * 认证平台来自用户配置的 providers 数组：支持任意 OAuth2 / OIDC
- * （Authorization Code + userinfo），字段映射可自定义。
+ * <p>The whole configuration is stored as JSON in the plugin registry
+ * (ctx.plugins.getConfig/setConfig) with defaults plus a shallow merge
+ * (consistent with easy-captcha / advanced-user-management). Providers come
+ * from the user-configured providers array: any OAuth2 / OIDC
+ * (Authorization Code + userinfo) is supported, with customizable field
+ * mappings.</p>
+ * @since 1.0.0
  */
 
 /** 插件注册表配置服务的最小接口（由 ctx.plugins 满足）。 */

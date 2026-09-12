@@ -1,8 +1,21 @@
 <!--
-  Author: MoyuZJ
-  Team: LinearTeam
-  Contact: linearteam@foxmail.com
-  Made by MoyuZJ in China with ♥
+  Single Sign-On Settings View
+
+  Admin view for configuring the OIDC / OAuth2 single sign-on plugin.
+
+  Authors:
+  MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+
+  Copyright (C) 2026 Evarentha
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+<!--
+  Renders the general panel (callback path with live preview, auto-register
+  switch), the providers JSON editor with insertable OIDC/OAuth2 templates,
+  and the OIDC Discovery auto-fill form; saving posts to
+  /admin/oidc-sso/settings/save.
+  @since 1.0.0
 -->
 <section class="page-head"><p class="eyebrow">AUTH / SINGLE SIGN-ON</p><h1>OIDC 单点登录</h1></section>
 <% if (typeof notice !== 'undefined' && notice) { %><div class="sso-notice"><%= notice %></div><% } %>

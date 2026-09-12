@@ -1,14 +1,22 @@
 /*
- * Author: MoyuZJ
- * Team: LinearTeam
- * Contact: linearteam@foxmail.com
- * Made by MoyuZJ in China with ♥
+ * OAuth2 / OIDC Protocol Layer
+ *
+ * Protocol helpers for the SSO flow: authorize URLs, code exchange,
+ * userinfo, and identity extraction.
+ *
+ * Authors:
+ * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ *
+ * Copyright (C) 2026 Evarentha
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 /**
- * OAuth2 / OIDC 协议层：授权链接构造、授权码换取令牌、UserInfo 获取、
- * OIDC Discovery 自动填充、身份字段提取与用户名安全化。
- * 全部基于 Node 内置 fetch（Node 24），无外部依赖。
+ * OAuth2 / OIDC protocol layer: authorize-URL construction, authorization-
+ * code exchange for tokens, UserInfo fetching, OIDC Discovery auto-fill,
+ * identity field extraction, and username sanitization. Built entirely on
+ * Node's built-in fetch (Node 24), with no external dependencies.
+ * @since 1.0.0
  */
 
 import { createHash, randomBytes } from 'node:crypto';

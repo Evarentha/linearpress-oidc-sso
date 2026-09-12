@@ -1,8 +1,23 @@
 /*
- * Author: MoyuZJ
- * Team: LinearTeam
- * Contact: linearteam@foxmail.com
- * Made by MoyuZJ in China with ♥
+ * Single Sign-On Frontend Runtime
+ *
+ * Injects SSO login buttons and the account-binding panel, and powers the
+ * admin settings form.
+ *
+ * Authors:
+ * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ *
+ * Copyright (C) 2026 Evarentha
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/**
+ * On the login page, fetches the provider list and injects the SSO buttons
+ * above the password form. On the profile edit page or dashboard, renders
+ * the bind/unbind panel. On the admin settings page, wires the provider
+ * JSON templates, the OIDC Discovery auto-fill request, and the live
+ * callback-URL preview.
+ * @since 1.0.0
  */
 
 (() => {

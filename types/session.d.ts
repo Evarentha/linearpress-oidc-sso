@@ -1,8 +1,23 @@
 /*
- * Author: MoyuZJ
- * Team: LinearTeam
- * Contact: linearteam@foxmail.com
- * Made by MoyuZJ in China with ♥
+ * SSO Session Type Augmentation
+ *
+ * Adds the ssoPending and ssoCreatePending session fields used by the SSO
+ * plugin.
+ *
+ * Authors:
+ * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ *
+ * Copyright (C) 2026 Evarentha
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/**
+ * Module augmentation for express-session: ssoPending carries the one-time
+ * login/bind state (CSRF state, intent, PKCE verifier, return path) written
+ * when a flow starts and cleared right after callback validation, while
+ * ssoCreatePending holds the account-creation snapshot for the confirmation
+ * page. Both expire after 10 minutes.
+ * @since 1.0.0
  */
 
 import 'express-session';

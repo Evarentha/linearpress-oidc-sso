@@ -1,27 +1,48 @@
 /*
- * Author: MoyuZJ
- * Team: LinearTeam
- * Contact: linearteam@foxmail.com
- * Made by MoyuZJ in China with ♥
+ * OIDC / OAuth2 Single Sign-On Plugin
+ *
+ * Single sign-on for LinearPress through any OAuth2 / OIDC provider, with
+ * account binding and optional auto-registration.
+ *
+ * Authors:
+ * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ *
+ * Copyright (C) 2026 Evarentha
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 /**
- * OIDC / OAuth2 单点登录插件（Cordis 原生插件，export default 即 activate 阶段）。
+ * OIDC / OAuth2 single sign-on plugin (native Cordis plugin; the default
+ * export is the activate phase).
  *
- * 功能：
- *  1. 可自定义认证平台：任意 OAuth2 / OIDC（Authorization Code + userinfo），
- *     回调地址默认 /sso-callback（设置页可改，保存后重启生效）。
- *  2. 未注册用户询问是否创建站点账户（用户名/邮箱取自平台，重名自动追加
- *     _openid 后四位）；关闭自动注册后不再询问，仅允许已绑定用户登录。
- *  3. 已登录用户绑定/解绑平台账号：已安装 colorful-profiles 时在资料编辑页
- *     （/profile/edit），否则在仪表盘（/admin）提供入口。
+ * <p>Features:</p>
+ * <ul>
+ * <li>Custom identity providers: any OAuth2 / OIDC (Authorization Code +
+ * userinfo); the callback path defaults to /sso-callback (configurable on
+ * the settings page; restart required after saving).</li>
+ * <li>Unregistered users are asked whether to create a site account
+ * (username/email taken from the provider; on name collisions a _openid
+ * suffix with the last four characters of the platform id is appended);
+ * with auto-registration disabled the prompt disappears and only
+ * already-bound users may log in.</li>
+ * <li>Logged-in users can bind/unbind provider accounts: the entry point
+ * lives on the profile edit page (/profile/edit) when colorful-profiles is
+ * installed, otherwise on the dashboard (/admin).</li>
+ * </ul>
  *
- * 与 easy-captcha / easy-2fa 兼容：
- *  - SSO 走独立回调路由（GET），不经过 /login，天然跳过人机验证；
- *  - 登录后仅写入标准会话（regenerate + userId，不标记 easy2faPassed），
- *    easy-2fa 的强制中间件会自动接手：已绑定两步验证的用户进入挑战页继续验证，
- *    严格模式下未绑定的用户被引导至绑定页；未完成验证则登录不完整（所有请求
- *    被拦回挑战/绑定页）。状态仅存会话，不耦合 easy-2fa 内部函数。
+ * <p>Compatible with easy-captcha / easy-2fa:</p>
+ * <ul>
+ * <li>SSO uses a standalone callback route (GET) that never passes through
+ * /login, naturally skipping human verification.</li>
+ * <li>After login only a standard session is written (regenerate + userId,
+ * without marking easy2faPassed), so easy-2fa's enforcing middleware takes
+ * over automatically: users with two-step verification bound continue on
+ * the challenge page, and in strict mode unbound users are guided to the
+ * binding page; until verification completes the login stays incomplete
+ * (all requests are pushed back to the challenge/bind pages). State lives
+ * in the session only, with no coupling to easy-2fa internals.</li>
+ * </ul>
+ * @since 1.0.0
  */
 
 import { randomBytes } from 'node:crypto';

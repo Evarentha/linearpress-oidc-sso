@@ -1,16 +1,25 @@
 /*
- * Author: MoyuZJ
- * Team: LinearTeam
- * Contact: linearteam@foxmail.com
- * Made by MoyuZJ in China with ♥
+ * Single Sign-On Binding Store
+ *
+ * Persistence for provider-to-user bindings on top of the business database
+ * (SQLite or MySQL).
+ *
+ * Authors:
+ * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ *
+ * Copyright (C) 2026 Evarentha
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 /**
- * 单点登录绑定关系存储。
+ * Single sign-on binding storage.
  *
- * 表跟随业务数据库（ctx.databaseService）：SQLite 与 MySQL（mysql-plugin 驱动）
- * 均可使用，删除用户时由数据库层 ON DELETE CASCADE 自动清理绑定。
- * DDL 采用跨方言写法（无 AUTOINCREMENT / CREATE INDEX IF NOT EXISTS）。
+ * <p>The table follows the business database (ctx.databaseService): both
+ * SQLite and MySQL (mysql-plugin driver) work, and deleting a user lets the
+ * database layer's ON DELETE CASCADE clean up bindings automatically. The
+ * DDL uses cross-dialect syntax (no AUTOINCREMENT / CREATE INDEX IF NOT
+ * EXISTS).</p>
+ * @since 1.0.0
  */
 
 export interface SsoBinding {

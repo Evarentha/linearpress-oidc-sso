@@ -1,8 +1,21 @@
 <!--
-  Author: MoyuZJ
-  Team: LinearTeam
-  Contact: linearteam@foxmail.com
-  Made by MoyuZJ in China with ♥
+  SSO Account Creation Confirmation View
+
+  Asks unregistered users after an SSO callback whether to create a site
+  account from their provider identity.
+
+  Authors:
+  MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+
+  Copyright (C) 2026 Evarentha
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+<!--
+  Shows the provider name/icon and the openid tail, previews the proposed
+  username (a _openid suffix is appended on collision) and email, and
+  submits to /sso/confirm-create; a ghost link returns to /login.
+  @since 1.0.0
 -->
 <section class="auth sso-auth">
   <p class="eyebrow">ACCOUNT LINK</p>

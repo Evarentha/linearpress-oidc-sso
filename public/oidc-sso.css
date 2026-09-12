@@ -1,8 +1,21 @@
 /*
- * Author: MoyuZJ
- * Team: LinearTeam
- * Contact: linearteam@foxmail.com
- * Made by MoyuZJ in China with ♥
+ * Single Sign-On Styles
+ *
+ * Styles for every SSO surface: login buttons, binding panel, confirmation
+ * page, and admin settings.
+ *
+ * Authors:
+ * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ *
+ * Copyright (C) 2026 Evarentha
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/*
+ * Covers four surfaces: the provider buttons injected above the login form,
+ * the account-binding panel injected on the profile edit page or dashboard,
+ * the create-account confirmation page, and the admin settings panels.
+ * @since 1.0.0
  */
 
 /* ---------- 登录页 SSO 按钮（注入 .auth） ---------- */
