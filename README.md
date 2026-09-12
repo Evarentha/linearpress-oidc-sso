@@ -1,80 +1,69 @@
-<!--
-  Author: MoyuZJ
-  Team: LinearTeam
-  Contact: linearteam@foxmail.com
-  Made by MoyuZJ in China with ♥
--->
+# OIDC SSO
 
-# OIDC 单点登录（oidc-sso）
+[![LinearPress](https://img.shields.io/badge/LinearPress-plugin-7C3AED.svg)](https://www.npmjs.com/package/@evarentha/linearpress) [![npm](https://img.shields.io/npm/v/@evarentha/linearpress-oidc-sso.svg)](https://www.npmjs.com/package/@evarentha/linearpress-oidc-sso) [![Node.js](https://img.shields.io/badge/node-%3E%3D22-green.svg)](https://nodejs.org) [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](https://www.typescriptlang.org) [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 
-为 LinearPress 提供基于 **OIDC / OAuth2（Authorization Code）** 的单点登录：
-可自定义添加任意兼容的认证平台（学校/企业统一身份、GitHub、GitLab、Keycloak、Authing、Okta、Azure AD 等），
-登录页顶部自动出现平台登录按钮。
+**English** | [简体中文](README.zh-CN.md)
 
-> 本仓库是 LinearPress 插件 **oidc-sso** 的独立开发仓库。插件即 Cordis 插件函数，即插即用、可停用可卸载。
-> 依赖：无（Node 24 内置 `fetch` / `crypto`）。
+Single sign-on for LinearPress through any OIDC or OAuth2 provider over the Authorization Code flow: Keycloak, Auth0, Okta, GitHub, enterprise and school identity servers. Providers are managed from the admin console, Discovery autofills the endpoints, unknown accounts can be registered behind a confirmation page, and logged-in users can bind and unbind provider accounts. The plugin uses only Node's built-in `fetch` and `crypto`; it has zero external dependencies.
 
-## 插件化的优势
+You need an application registered on some provider, with a callback URL you control.
 
-- **认证外置不改核心**：SSO 走独立回调路由（GET），不经 `/login`，与 easy-captcha 的人机验证全程不冲突（SSO 登录不经过人机验证）。
-- **两处绑定入口**：装 colorful-profiles 时在个人资料编辑页绑定/解绑，否则在仪表盘操作——靠 Hook 挂载，双方都不用改代码。
-- **自动注册可控**：未绑定平台账号默认在登录时询问是否创建账户（可关闭仅允许已绑定登录），用户体系零冲突。
-
-## 功能
-
-1. **自定义认证平台**：填 client_id/secret、授权/令牌/用户信息地址与字段映射即可；支持 **OIDC Discovery** 一键自动填充（填 `.well-known/openid-configuration`）。
-2. **回调地址可配置**：默认 `/sso-callback`（修改后需重启）。
-3. **登录按钮**：登录页**上方**注入平台登录按钮；未配置平台时不显示。
-4. **自动注册/绑定**：用户名已存在自动追加 `_openid` + openid 后四位；用户名安全化（仅字母/数字/下划线/连字符，短名补齐，冲突继续 `-2/-3`）。
-5. **绑定/解绑**：个人资料编辑页或仪表盘。
-
-## 安装
+## Install
 
 ```bash
-# 方式一：工作区同步
-cd base && sh scripts/sync-plugins.sh oidc-sso
-
-# 方式二：克隆到运行目录（目录名必须等于插件 id）
-git clone <本仓库地址> src/plugins/oidc-sso
+git clone https://github.com/Evarentha/linearpress-oidc-sso.git src/plugins/oidc-sso
 ```
 
-启用后进入后台「单点登录」菜单配置平台。
+The directory name must equal the plugin id. Restart afterwards, or sync from the `base` checkout (`sh scripts/sync-plugins.sh oidc-sso`), or upload the ZIP / npm name from the admin Plugins page, then open "单点登录" in the admin menu.
 
-## 配置一个平台（示例：任意 OIDC）
+## Setting up a provider
 
-1. 在认证平台创建应用，回调地址填 `https://你的站点/<回调路径>`（默认 `/sso-callback`）。
-2. 后台「单点登录」：填写 Discovery 地址与 Client ID / Secret →「从 Discovery 生成并追加」；或手动插入 OIDC/OAuth2 模板编辑。
-3. 保存即可，登录页顶部出现「通过 平台名 登录」。
+Everything lives on `/admin/oidc-sso/settings`, stored as JSON in the plugin registry; managing providers requires the base `plugin:manage` permission. Per provider:
 
-providers JSON 关键字段：`id / name / icon / enabled / type(oidc|oauth2) / clientId / clientSecret / scope / authorizeUrl / tokenUrl / userInfoUrl / idField(sub) / usernameField / emailField / usePkce`。
+1. Register an application on the provider side with the callback URL set to `<your site origin>/<callback path>` (`/sso-callback` by default).
+2. Add the provider on the settings page: name, icon, client id and secret, scope, authorize/token/userinfo URLs, and the field mapping for subject, username, and email. Paste the Discovery URL (`.well-known/openid-configuration`) and the endpoints autofill. Enable PKCE (S256) if the provider supports it.
+3. Enable the provider. A "sign in with X" button appears above the login form, fed by the public list at `GET /sso/providers`.
 
-## 本地开发：怎么拉 / 怎么改 / 怎么跑
+Site-wide: the callback path can be changed on the same page and takes effect after a restart. Auto-registration can be turned off, in which case only provider accounts already bound to site users can sign in.
 
-```bash
-git clone <本仓库地址> LinearPress/Plugins/oidc-sso
-cd LinearPress/base
-npm install && npm run db:init
-sh scripts/sync-plugins.sh oidc-sso
-npm run dev
+The settings page edits a JSON structure of this shape (Discovery fills the three URLs; the server generates the provider `id` on save, so you can omit it):
+
+```json
+{
+  "callbackPath": "/sso-callback",
+  "autoRegister": true,
+  "providers": [
+    {
+      "name": "Keycloak",
+      "icon": "K",
+      "enabled": true,
+      "clientId": "linearpress",
+      "clientSecret": "…",
+      "scope": "openid profile email",
+      "authorizeUrl": "https://idp.example.com/auth",
+      "tokenUrl": "https://idp.example.com/token",
+      "userInfoUrl": "https://idp.example.com/userinfo",
+      "usePkce": true,
+      "idField": "sub",
+      "usernameField": "preferred_username",
+      "emailField": "email"
+    }
+  ]
+}
 ```
 
-## 目录结构
+## The sign-in flow
 
-```text
-oidc-sso/
-├── plugin.json            # Manifest
-├── index.ts               # 入口：SSO 回调、绑定/解绑、登录按钮注入
-├── src/
-│   ├── config.ts          # providers 配置模型
-│   ├── oauth.ts           # OIDC/OAuth2 流程 + Discovery
-│   └── store.ts           # 绑定关系存储
-├── views/                 # 登录页按钮注入、后台设置页
-├── public/                # 前端脚本与样式
-└── types/session.d.ts
-```
+An unknown provider account lands on a confirmation page before any account is created. Usernames are sanitized to unicode letters, numbers, underscore, and hyphen; a duplicate name gets an `_openid` suffix followed by the tail of the provider's subject ID, and further collisions add `-2`, `-3`, and so on. Logged-in users bind and unbind from the profile page (colorful-profiles' page when installed, the dashboard otherwise), and binding an account already bound to another user returns a 409.
 
-## 贡献与发布
+The security baseline: CSRF state with expiry, one-time pending states, a `safeReturnPath` open-redirect guard, and session regeneration on login. No site passwords are involved; an SSO login writes a standard session.
 
-- conventional commits；提交前 `cd base && npm run typecheck`
-- 版本：`git tag v1.0.0 && git push --tags`
-- License：MIT（见仓库 LICENSE）
+Two coexistence details. The callback is a separate GET route, so SSO sign-in never passes through easy-captcha's `/login` check. And an SSO login does not set `easy2faPassed`, so easy-2fa's middleware takes over naturally when that plugin is active. Neither plugin needs a change for either behavior.
+
+## Data
+
+Provider configuration is stored as JSON in the plugin registry through the plugin config service. The `sso_bindings` table maps provider accounts to site users on a composite key of `provider` plus `sub`, with a username and email snapshot refreshed at every login.
+
+## License
+
+GPL-3.0-or-later, Copyright (C) 2026 Evarentha. See LICENSE.
