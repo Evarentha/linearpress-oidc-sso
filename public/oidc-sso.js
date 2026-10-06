@@ -1,11 +1,11 @@
 /*
  * Single Sign-On Frontend Runtime
  *
- * Injects SSO login buttons and the account-binding panel, and powers the
- * admin settings form.
+ * Injects SSO login buttons and the account-binding panel, and powers the admin settings form.
  *
  * Authors:
  * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@gmail.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later

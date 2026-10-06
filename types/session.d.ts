@@ -1,11 +1,11 @@
 /*
  * SSO Session Type Augmentation
  *
- * Adds the ssoPending and ssoCreatePending session fields used by the SSO
- * plugin.
+ * Adds the ssoPending and ssoCreatePending session fields used by the SSO plugin.
  *
  * Authors:
  * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@gmail.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later

@@ -1,11 +1,11 @@
 /*
  * Single Sign-On Configuration Model
  *
- * Types, defaults, validation, and settings-form parsing for the SSO
- * plugin, stored as JSON in the plugin registry.
+ * Types, defaults, validation, and settings-form parsing for the SSO plugin, stored as JSON in the plugin registry.
  *
  * Authors:
  * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@gmail.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later

@@ -1,11 +1,11 @@
 /*
  * OAuth2 / OIDC Protocol Layer
  *
- * Protocol helpers for the SSO flow: authorize URLs, code exchange,
- * userinfo, and identity extraction.
+ * Protocol helpers for the SSO flow: authorize URLs, code exchange, userinfo, and identity extraction.
  *
  * Authors:
  * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@gmail.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later

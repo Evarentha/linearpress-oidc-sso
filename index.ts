@@ -1,11 +1,11 @@
 /*
  * OIDC / OAuth2 Single Sign-On Plugin
  *
- * Single sign-on for LinearPress through any OAuth2 / OIDC provider, with
- * account binding and optional auto-registration.
+ * Single sign-on for LinearPress through any OAuth2 / OIDC provider, with account binding and optional auto-registration.
  *
  * Authors:
  * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@gmail.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -53,6 +53,7 @@ import type { SsoConfig, SsoProvider } from './src/config.js';
 import { DEFAULT_CALLBACK_PATH, exampleProvidersJson, loadConfig, normalizeConfig, parseSettingsForm, providerReady, saveConfig, validateConfig } from './src/config.js';
 import { buildAuthorizeUrl, discoverOpenIdProvider, exchangeCode, extractIdentity, fetchUserInfo, generatePkce, randomState, resolveUsername, safeUsername, type SsoIdentity } from './src/oauth.js';
 import type { SsoDb } from './src/store.js';
+import { regenerateSession } from './src/session.js';
 import { createBinding, ensureSchema, findBinding, listBindingsByUser, refreshBindingSnapshot, removeBindingByUserAndProvider } from './src/store.js';
 
 const PLUGIN_ID = 'oidc-sso';
@@ -218,7 +219,7 @@ export default async function oidcSso(context: Context): Promise<void> {
       }
     }
     if (!user) throw new Error('无法创建或定位站点账户');
-    await new Promise((resolve) => req.session.regenerate(() => resolve()));
+    await regenerateSession(req.session);
     req.session.userId = user.id;
     res.redirect('/admin');
   }));
@@ -362,7 +363,7 @@ export default async function oidcSso(context: Context): Promise<void> {
     }
     // 标准登录态：regenerate 防会话固定；不标记 easy2faPassed，
     // 需要两步验证的用户由 easy-2fa 强制中间件自动转入挑战/绑定页。
-    await new Promise((resolve) => req.session.regenerate(() => resolve()));
+    await regenerateSession(req.session);
     req.session.userId = user.id;
     res.redirect(returnTo);
   }

@@ -1,11 +1,11 @@
 /*
  * Single Sign-On Binding Store
  *
- * Persistence for provider-to-user bindings on top of the business database
- * (SQLite or MySQL).
+ * Persistence for provider-to-user bindings on top of the business database (SQLite or MySQL).
  *
  * Authors:
  * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@gmail.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later
