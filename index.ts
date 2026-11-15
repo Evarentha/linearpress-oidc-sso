@@ -158,7 +158,18 @@ export default async function oidcSso(ctx: Context): Promise<void> {
   }));
 
   /* ---------- the user's connections ---------- */
-  ui.menu('user.menu', { title: '关联账号', href: ACCOUNT, order: 82, when: () => ready().length > 0 });
+  // Reached from the account page card below (the user menu links to /account).
+  ui.slot('account.sections', {
+    order: 30,
+    match: (req) => req.path === '/account' && ready().length > 0,
+    prepare: async (req) => (req.session.userId ? { linked: (await bindingsOf(db(), req.session.userId)).map((row) => provider(row.provider)?.name).filter(Boolean) } : null),
+    render: ({ data, esc }) => {
+      const state = data as { linked: string[] } | null;
+      if (!state) return '';
+      const summary = state.linked.length ? `已关联：${state.linked.map((name) => esc(name)).join('、')}` : '还没有关联其他登录方式。';
+      return `<section class="card stack" data-lp-plugin="oidc-sso" aria-labelledby="sso-account-card"><div><h2 class="section-title" id="sso-account-card">关联账号</h2><p>${summary}</p></div><div><a class="btn" href="${ACCOUNT}">管理关联账号</a></div></section>`;
+    }
+  });
   web.register('get', ACCOUNT, requireAuth, route(async (req, res) => {
     const rows = await bindingsOf(db(), req.session.userId!);
     res.render(`${PLUGIN_ID}/account`, { pageTitle: '关联账号', providers: ready().map((item) => ({ item, binding: rows.find((row) => row.provider === item.id) })), orphan: rows.filter((row) => !provider(row.provider)) });
