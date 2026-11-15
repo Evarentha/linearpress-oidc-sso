@@ -1,0 +1,19 @@
+<%#
+  OIDC SSO · confirm creating a site account for a new provider account (auth layout).
+
+  Authors:
+  MoyuZJ <moyuzj@evarentha.com> @LinearTeam - Made in China with ♥
+  worryzu <worryzu@evarentha.com> @LinearTeam
+
+  Copyright (C) 2026 Evarentha
+  SPDX-License-Identifier: GPL-3.0-or-later
+%><section class="auth-panel" data-lp-plugin="oidc-sso" aria-labelledby="sso-create-title">
+  <h1 id="sso-create-title">创建本站账号</h1>
+  <p class="sub">你的 <%= providerName %> 账号还没有关联本站账号。确认后会新建一个账号并自动关联，以后可以直接用 <%= providerName %> 登录。</p>
+  <dl class="sso-summary">
+    <dt>用户名</dt><dd><%= username %></dd>
+    <dt>邮箱</dt><dd><%= email || '（不填写）' %></dd>
+  </dl>
+  <form method="post" action="/sso/create"><button class="btn btn-primary btn-lg btn-block" type="submit">创建并登录</button></form>
+  <p class="help">已经有本站账号？请<a href="/login">用账号密码登录</a>，然后在“关联账号”页面关联 <%= providerName %>。</p>
+</section>

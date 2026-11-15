@@ -4,8 +4,8 @@
  * Types, defaults, validation, and settings-form parsing for the SSO plugin, stored as JSON in the plugin registry.
  *
  * Authors:
- * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
- * worryzu <worryzu@gmail.com> @LinearTeam
+ * MoyuZJ <moyuzj@evarentha.com> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@evarentha.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -22,12 +22,6 @@
  * mappings.</p>
  * @since 1.0.0
  */
-
-/** 插件注册表配置服务的最小接口（由 ctx.plugins 满足）。 */
-export interface PluginConfigService {
-  getConfig<T = unknown>(id: string): T | null;
-  setConfig(id: string, config: unknown): void;
-}
 
 /** 认证平台类型（仅用于设置页展示，不改变流程）。 */
 export type SsoProviderType = 'oidc' | 'oauth2' | 'other';
@@ -92,7 +86,7 @@ export function normalizeCallbackPath(value: unknown): string {
   return clean.startsWith('/') ? clean : `/${clean}`;
 }
 
-function normalizeProvider(raw: unknown, index: number, usedIds: Set<string>): SsoProvider {
+export function normalizeProvider(raw: unknown, index: number, usedIds: Set<string>): SsoProvider {
   const input = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const name = asString(input.name, `平台 ${index + 1}`).trim() || `平台 ${index + 1}`;
   let id = asString(input.id, slugify(name));
@@ -128,17 +122,9 @@ export function normalizeConfig(raw: unknown): SsoConfig {
     : [];
   return {
     callbackPath: normalizeCallbackPath(input.callbackPath),
-    autoRegister: asBoolean(input.autoRegister, true),
+    autoRegister: asBoolean(input.autoRegister, false),
     providers
   };
-}
-
-export function loadConfig(plugins: PluginConfigService): SsoConfig {
-  return normalizeConfig(plugins.getConfig<unknown>('oidc-sso'));
-}
-
-export function saveConfig(plugins: PluginConfigService, config: SsoConfig): void {
-  plugins.setConfig('oidc-sso', config);
 }
 
 /** 返回配置问题列表（空数组 = 可保存）。 */
@@ -160,27 +146,35 @@ export function validateConfig(config: SsoConfig): string[] {
   return errors;
 }
 
-/** 从设置页表单构建配置；providers_json 为 JSON 数组字符串。 */
-export function parseSettingsForm(body: Record<string, unknown>): SsoConfig {
-  const checkbox = (value: unknown): boolean => value === 'on' || value === '1' || value === true;
-  let providers: SsoProvider[] = [];
-  const rawJson = asString(body.providers_json, '').trim();
-  if (rawJson) {
-    try {
-      const parsed = JSON.parse(rawJson);
-      if (Array.isArray(parsed)) providers = parsed;
-      else throw new Error('providers 必须是数组');
-    } catch (error) {
-      throw new Error(`认证平台 JSON 解析失败：${error instanceof Error ? error.message : '格式错误'}`);
-    }
-  }
-  return normalizeConfig({
-    callbackPath: asString(body.callback_path, DEFAULT_CALLBACK_PATH),
-    autoRegister: checkbox(body.auto_register),
-    providers
-  });
+/** One provider from the settings form. A blank secret keeps the saved one. */
+export function parseProviderForm(body: Record<string, unknown>, existing?: SsoProvider): SsoProvider {
+  const text = (key: string) => String(body[key] ?? '').trim();
+  const provider = normalizeProvider({
+    id: existing?.id ?? (text('id') || undefined),
+    name: text('name'), enabled: body.enabled === 'on', type: text('type'), icon: text('icon'),
+    clientId: text('clientId'), clientSecret: text('clientSecret') || existing?.clientSecret || '',
+    scope: text('scope'), authorizeUrl: text('authorizeUrl'), tokenUrl: text('tokenUrl'), userInfoUrl: text('userInfoUrl'),
+    idField: text('idField'), usernameField: text('usernameField'), emailField: text('emailField'), usePkce: body.usePkce === 'on'
+  }, 0, new Set());
+  if (body.clearSecret === 'on') provider.clientSecret = '';
+  return provider;
 }
 
+/** Problems that keep a provider from working, as field → message. */
+export function providerErrors(provider: SsoProvider): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (!provider.name) errors.name = '请填写名称';
+  if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(provider.id)) errors.id = '标识只能包含小写字母、数字和短横线';
+  if (provider.enabled) {
+    if (!provider.clientId) errors.clientId = '请填写 Client ID';
+    if (!provider.clientSecret) errors.clientSecret = '请填写 Client Secret';
+    for (const key of ['authorizeUrl', 'tokenUrl', 'userInfoUrl'] as const) {
+      if (!provider[key]) errors[key] = '请填写地址';
+      else if (!/^https:\/\//i.test(provider[key]) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(provider[key])) errors[key] = '必须是 https 地址（本机测试可用 http://localhost）';
+    }
+  }
+  return errors;
+}
 /** 认证平台是否可用于登录（enabled 且关键配置齐全）。 */
 export function providerReady(provider: SsoProvider): boolean {
   return provider.enabled && Boolean(provider.clientId && provider.clientSecret && provider.authorizeUrl && provider.tokenUrl && provider.userInfoUrl);

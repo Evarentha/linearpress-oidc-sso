@@ -1,0 +1,30 @@
+<%#
+  OIDC SSO · the signed-in user's connected accounts.
+
+  Authors:
+  MoyuZJ <moyuzj@evarentha.com> @LinearTeam - Made in China with ♥
+  worryzu <worryzu@evarentha.com> @LinearTeam
+
+  Copyright (C) 2026 Evarentha
+  SPDX-License-Identifier: GPL-3.0-or-later
+%><div class="wrap wrap-read stack" data-lp-plugin="oidc-sso">
+  <header class="list-head"><div><h1>关联账号</h1><p>关联后，可以用这些第三方账号直接登录本站。</p></div></header>
+  <ul class="sso-list">
+    <% for (const { item, binding } of providers) { %>
+    <li class="card">
+      <div class="sso-name"><% if (item.icon && [...item.icon].length <= 2) { %><span class="sso-icon" aria-hidden="true"><%= item.icon %></span><% } %><strong><%= item.name %></strong>
+        <% if (binding) { %><span class="muted"><%= binding.username || binding.email || `编号尾号 ${String(binding.sub).slice(-4)}` %> · <%= formatDate(binding.created_at, { time: false }) %> 关联</span><% } else { %><span class="muted">未关联</span><% } %>
+      </div>
+      <% if (binding) { %>
+      <form method="post" action="/account/connections/<%= encodeURIComponent(item.id) %>/delete" data-confirm="解除后不能再用 <%= item.name %> 登录这个账号。" data-confirm-title="解除关联" data-confirm-text="解除"><button class="btn btn-sm" type="submit">解除关联</button></form>
+      <% } else { %>
+      <form method="post" action="/sso/connect/<%= encodeURIComponent(item.id) %>"><button class="btn btn-sm btn-primary" type="submit">关联</button></form>
+      <% } %>
+    </li>
+    <% } %>
+    <% for (const binding of orphan) { %>
+    <li class="card"><div class="sso-name"><strong><%= binding.provider %></strong><span class="muted">这个登录方式已被站点停用</span></div>
+      <form method="post" action="/account/connections/<%= encodeURIComponent(binding.provider) %>/delete"><button class="btn btn-sm" type="submit">移除</button></form></li>
+    <% } %>
+  </ul>
+</div>

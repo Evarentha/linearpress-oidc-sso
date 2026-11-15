@@ -1,81 +1,38 @@
 /*
- * Single Sign-On Binding Store
+ * OIDC SSO Binding Store
  *
- * Persistence for provider-to-user bindings on top of the business database (SQLite or MySQL).
+ * Links between provider accounts (provider + sub) and site accounts.
  *
  * Authors:
- * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
- * worryzu <worryzu@gmail.com> @LinearTeam
+ * MoyuZJ <moyuzj@evarentha.com> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@evarentha.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 /**
- * Single sign-on binding storage.
+ * <p><code>created_account</code> marks bindings that created the site
+ * account; such accounts have a random password, so their last binding must
+ * not be removed.</p>
  *
- * <p>The table follows the business database (ctx.databaseService): both
- * SQLite and MySQL (mysql-plugin driver) work, and deleting a user lets the
- * database layer's ON DELETE CASCADE clean up bindings automatically. The
- * DDL uses cross-dialect syntax (no AUTOINCREMENT / CREATE INDEX IF NOT
- * EXISTS).</p>
  * @since 1.0.0
  */
 
-export interface SsoBinding {
-  provider: string;
-  sub: string;
-  user_id: number;
-  username: string | null;
-  email: string | null;
-  created_at: string;
+import type { DatabaseService } from 'linearpress/plugin-api';
+
+export interface SsoBinding { provider: string; sub: string; user_id: number; username: string | null; email: string | null; created_at: string; created_account: number; }
+
+export async function ensureSchema(db: DatabaseService): Promise<void> {
+  await db.exec(`CREATE TABLE IF NOT EXISTS sso_bindings (provider VARCHAR(64) NOT NULL, sub VARCHAR(191) NOT NULL, user_id BIGINT NOT NULL, username VARCHAR(255) NULL, email VARCHAR(255) NULL, created_at VARCHAR(40) NOT NULL, created_account INT NOT NULL DEFAULT 0, PRIMARY KEY (provider, sub))`);
+  if (!await db.hasColumn('sso_bindings', 'created_account')) await db.exec('ALTER TABLE sso_bindings ADD COLUMN created_account INT NOT NULL DEFAULT 0');
 }
 
-/** 最小数据库接口（由 ctx.databaseService 满足，方法允许同步或 Promise）。 */
-export interface SsoDb {
-  exec(sql: string): unknown;
-  run(sql: string, ...params: unknown[]): unknown;
-  get<T = unknown>(sql: string, ...params: unknown[]): T | undefined | Promise<T | undefined>;
-  all<T = unknown>(sql: string, ...params: unknown[]): T[] | Promise<T[]>;
-}
-
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS sso_bindings (
-  provider VARCHAR(64) NOT NULL,
-  sub VARCHAR(255) NOT NULL,
-  user_id BIGINT NOT NULL,
-  username VARCHAR(255),
-  email VARCHAR(255),
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (provider, sub)
-);
-`;
-
-/** 表已存在时跳过建表（容错：MySQL 建表语句在已存在表上直接返回）。 */
-export async function ensureSchema(db: SsoDb): Promise<void> {
-  await Promise.resolve(db.exec(SCHEMA)).catch((error) => {
-    if (String(error?.message ?? error).includes('already exists')) return;
-    throw error;
-  });
-}
-
-export async function findBinding(db: SsoDb, provider: string, sub: string): Promise<SsoBinding | undefined> {
-  return await Promise.resolve(db.get<SsoBinding>('SELECT * FROM sso_bindings WHERE provider=? AND sub=?', provider, sub));
-}
-
-export async function listBindingsByUser(db: SsoDb, userId: number): Promise<SsoBinding[]> {
-  return await Promise.resolve(db.all<SsoBinding>('SELECT * FROM sso_bindings WHERE user_id=? ORDER BY provider', userId));
-}
-
-export async function createBinding(db: SsoDb, input: { provider: string; sub: string; userId: number; username: string | null; email: string | null }): Promise<void> {
-  await Promise.resolve(db.run('INSERT INTO sso_bindings(provider, sub, user_id, username, email) VALUES(?,?,?,?,?)', input.provider, input.sub, input.userId, input.username, input.email));
-}
-
-/** 登录成功后刷新用户名/邮箱快照（不改变 provider/sub 主键）。 */
-export async function refreshBindingSnapshot(db: SsoDb, provider: string, sub: string, username: string | null, email: string | null): Promise<void> {
-  await Promise.resolve(db.run('UPDATE sso_bindings SET username=?, email=? WHERE provider=? AND sub=?', username, email, provider, sub));
-}
-
-export async function removeBindingByUserAndProvider(db: SsoDb, userId: number, provider: string): Promise<void> {
-  await Promise.resolve(db.run('DELETE FROM sso_bindings WHERE user_id=? AND provider=?', userId, provider));
-}
+export const findBinding = (db: DatabaseService, provider: string, sub: string) => db.get<SsoBinding>('SELECT * FROM sso_bindings WHERE provider = ? AND sub = ?', provider, sub);
+export const bindingsOf = (db: DatabaseService, userId: number) => db.all<SsoBinding>('SELECT * FROM sso_bindings WHERE user_id = ? ORDER BY provider', userId);
+export const createBinding = (db: DatabaseService, row: { provider: string; sub: string; userId: number; username: string | null; email: string | null; createdAccount?: boolean; now: string }) =>
+  db.run('INSERT INTO sso_bindings (provider, sub, user_id, username, email, created_at, created_account) VALUES (?, ?, ?, ?, ?, ?, ?)', row.provider, row.sub, row.userId, row.username, row.email, row.now, row.createdAccount ? 1 : 0);
+export const refreshBinding = (db: DatabaseService, provider: string, sub: string, username: string | null, email: string | null) =>
+  db.run('UPDATE sso_bindings SET username = ?, email = ? WHERE provider = ? AND sub = ?', username, email, provider, sub);
+export const removeBinding = (db: DatabaseService, userId: number, provider: string) => db.run('DELETE FROM sso_bindings WHERE user_id = ? AND provider = ?', userId, provider);
+export const countByProvider = async (db: DatabaseService) => new Map((await db.all<{ provider: string; n: number }>('SELECT provider, COUNT(*) AS n FROM sso_bindings GROUP BY provider')).map((row) => [row.provider, Number(row.n)]));

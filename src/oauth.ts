@@ -4,8 +4,8 @@
  * Protocol helpers for the SSO flow: authorize URLs, code exchange, userinfo, and identity extraction.
  *
  * Authors:
- * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
- * worryzu <worryzu@gmail.com> @LinearTeam
+ * MoyuZJ <moyuzj@evarentha.com> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@evarentha.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -71,7 +71,8 @@ export async function exchangeCode(provider: SsoProvider, code: string, redirect
   const response = await fetch(provider.tokenUrl, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
-    body
+    body,
+    signal: AbortSignal.timeout(10_000)
   });
   const text = await response.text();
   let data: Record<string, unknown>;
@@ -86,7 +87,8 @@ export async function exchangeCode(provider: SsoProvider, code: string, redirect
 export async function fetchUserInfo(provider: SsoProvider, accessToken: string): Promise<Record<string, unknown>> {
   const response = await fetch(provider.userInfoUrl, {
     method: 'GET',
-    headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' }
+    headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000)
   });
   if (!response.ok) throw new Error(`用户信息获取失败（${response.status}）`);
   return await response.json() as Record<string, unknown>;
@@ -137,7 +139,7 @@ export function resolveUsername(existing: (username: string) => Promise<boolean>
 /** OIDC Discovery：从 /.well-known/openid-configuration 提取关键端点并生成平台配置骨架。 */
 export async function discoverOpenIdProvider(discoveryUrl: string, extra: { name?: string; clientId?: string; clientSecret?: string; icon?: string }): Promise<Partial<SsoProvider>> {
   let response: Response;
-  try { response = await fetch(discoveryUrl, { headers: { accept: 'application/json' } }); }
+  try { response = await fetch(discoveryUrl, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10_000) }); }
   catch { throw new Error('无法访问 Discovery 地址'); }
   if (!response.ok) throw new Error(`Discovery 请求失败（${response.status}）`);
   const document = await response.json() as Record<string, unknown>;
@@ -148,11 +150,11 @@ export async function discoverOpenIdProvider(discoveryUrl: string, extra: { name
   const issuer = String(document.issuer ?? '').trim();
   const name = extra.name?.trim() || (issuer || discoveryUrl).replace(/^https?:\/\//i, '').split('/')[0] || 'OIDC 平台';
   return {
-    id: 'oidc',
+    id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'oidc',
     name,
     enabled: true,
     type: 'oidc',
-    icon: extra.icon?.trim() || '🔐',
+    icon: extra.icon?.trim() || '',
     clientId: extra.clientId?.trim() ?? '',
     clientSecret: extra.clientSecret?.trim() ?? '',
     scope: 'openid profile email',

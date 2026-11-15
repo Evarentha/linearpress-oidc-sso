@@ -1,370 +1,227 @@
 /*
- * OIDC / OAuth2 Single Sign-On Plugin
+ * OIDC SSO Plugin Entry Point
  *
- * Single sign-on for LinearPress through any OAuth2 / OIDC provider, with account binding and optional auto-registration.
+ * Sign in with any OAuth2 / OpenID Connect provider, and connect provider accounts to site accounts.
  *
  * Authors:
- * MoyuZJ <moyuzj@moyuzj.cn> @LinearTeam - Made in China with ♥
- * worryzu <worryzu@gmail.com> @LinearTeam
+ * MoyuZJ <moyuzj@evarentha.com> @LinearTeam - Made in China with ♥
+ * worryzu <worryzu@evarentha.com> @LinearTeam
  *
  * Copyright (C) 2026 Evarentha
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 /**
- * OIDC / OAuth2 single sign-on plugin (native Cordis plugin; the default
- * export is the activate phase).
+ * <p>A successful provider sign-in hands the user to the core login flow
+ * (<code>auth.beginLogin</code>), so account checks and two-factor sign-in
+ * apply exactly as for passwords; 3.x wrote the session itself and relied on
+ * other plugins to notice.</p>
+ * <p>Provider accounts are never matched to site accounts by email (that
+ * would let a provider take over accounts); unknown accounts are only
+ * created after the user confirms, when registration is open.</p>
  *
- * <p>Features:</p>
- * <ul>
- * <li>Custom identity providers: any OAuth2 / OIDC (Authorization Code +
- * userinfo); the callback path defaults to /sso-callback (configurable on
- * the settings page; restart required after saving).</li>
- * <li>Unregistered users are asked whether to create a site account
- * (username/email taken from the provider; on name collisions a _openid
- * suffix with the last four characters of the platform id is appended);
- * with auto-registration disabled the prompt disappears and only
- * already-bound users may log in.</li>
- * <li>Logged-in users can bind/unbind provider accounts: the entry point
- * lives on the profile edit page (/profile/edit) when colorful-profiles is
- * installed, otherwise on the dashboard (/admin).</li>
- * </ul>
- *
- * <p>Compatible with easy-captcha / easy-2fa:</p>
- * <ul>
- * <li>SSO uses a standalone callback route (GET) that never passes through
- * /login, naturally skipping human verification.</li>
- * <li>After login only a standard session is written (regenerate + userId,
- * without marking easy2faPassed), so easy-2fa's enforcing middleware takes
- * over automatically: users with two-step verification bound continue on
- * the challenge page, and in strict mode unbound users are guided to the
- * binding page; until verification completes the login stays incomplete
- * (all requests are pushed back to the challenge/bind pages). State lives
- * in the session only, with no coupling to easy-2fa internals.</li>
- * </ul>
  * @since 1.0.0
  */
 
 import { randomBytes } from 'node:crypto';
-import { Context } from 'cordis';
-import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { checkPermission, requireAuth } from '../../services/permission.service.js';
-import type { SsoConfig, SsoProvider } from './src/config.js';
-import { DEFAULT_CALLBACK_PATH, exampleProvidersJson, loadConfig, normalizeConfig, parseSettingsForm, providerReady, saveConfig, validateConfig } from './src/config.js';
+import type { Context } from 'cordis';
+import type { Request, Response } from 'express';
+import { checkPermission, requireAuth, route, text, messageOf, safeNext, utcNow, esc } from 'linearpress/plugin-api';
+import { normalizeCallbackPath, normalizeConfig, parseProviderForm, providerErrors, providerReady, type SsoConfig, type SsoProvider } from './src/config.js';
 import { buildAuthorizeUrl, discoverOpenIdProvider, exchangeCode, extractIdentity, fetchUserInfo, generatePkce, randomState, resolveUsername, safeUsername, type SsoIdentity } from './src/oauth.js';
-import type { SsoDb } from './src/store.js';
-import { regenerateSession } from './src/session.js';
-import { createBinding, ensureSchema, findBinding, listBindingsByUser, refreshBindingSnapshot, removeBindingByUserAndProvider } from './src/store.js';
+import { bindingsOf, countByProvider, createBinding, ensureSchema, findBinding, refreshBinding, removeBinding } from './src/store.js';
 
 const PLUGIN_ID = 'oidc-sso';
-const SETTINGS_URL = '/admin/oidc-sso/settings';
-const LOGIN_START_PREFIX = '/sso/login/';
-const CONNECT_PREFIX = '/sso/connect/';
-const DISCONNECT_PREFIX = '/sso/disconnect/';
-const MANAGE_PERMISSION = 'plugin:manage';
-/** 登录/绑定进行中状态与「创建账户」确认页的存活时间（分钟）。 */
-const STATE_TTL_MS = 10 * 60 * 1000;
+const ADMIN = '/admin/sso';
+const ACCOUNT = '/account/connections';
+const AUTH_LAYOUT = 'layouts/auth';
+const TTL = 10 * 60_000;
 
-const text = (value: unknown): string => String(value ?? '').trim();
-const param = (value: unknown): string => Array.isArray(value) ? String(value[0] ?? '') : String(value ?? '');
-const messageOf = (error: unknown): string => error instanceof Error ? error.message : '操作失败';
-/** 页面处理器包装：失败时渲染 error 视图（与 Base wrap 语义一致）。 */
-const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown): RequestHandler => (req, res, next) => {
-  void Promise.resolve(fn(req, res)).catch((error) => {
-    console.error(`[${PLUGIN_ID}] handler error:`, error);
-    if (res.headersSent) return next(error);
-    res.status(500).render('error', { title: '单点登录出错', message: messageOf(error) });
-  });
-};
-/** JSON API 处理器包装：失败时返回 { ok:false }（与 Base JSON 约定一致）。 */
-const wrapJson = (fn: (req: Request, res: Response) => Promise<unknown> | unknown): RequestHandler => (req, res) => {
-  void Promise.resolve(fn(req, res)).catch((error) => {
-    console.error(`[${PLUGIN_ID}] handler error:`, error);
-    if (!res.headersSent) res.status(400).json({ ok: false, message: messageOf(error) });
-  });
-};
-
-/** 同源回跳地址白名单：仅允许站内路径，防止开放重定向。 */
-function safeReturnPath(value: unknown): string | undefined {
-  const raw = String(value ?? '').trim();
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return undefined;
-  return raw;
+declare module 'express-session' {
+  interface SessionData {
+    ssoPending?: { state: string; provider: string; intent: 'login' | 'bind'; next: string; verifier?: string; exp: number };
+    ssoCreate?: { provider: string; sub: string; username: string; email: string | null; next: string; exp: number };
+  }
 }
 
-function randomPassword(): string { return randomBytes(24).toString('base64url'); }
+export default async function oidcSso(ctx: Context): Promise<void> {
+  const { web, ui, admin, auth } = ctx.linearpress;
+  const db = () => ctx.databaseService;
+  await ensureSchema(db());
+  let config: SsoConfig = normalizeConfig(await ctx.plugins.getConfig(PLUGIN_ID));
+  const save = async () => { await ctx.plugins.setConfig(PLUGIN_ID, config); };
+  const ready = () => config.providers.filter(providerReady);
+  const provider = (id: string) => ready().find((item) => item.id === id);
+  const origin = (req: Request) => `${req.protocol}://${req.get('host')}`;
+  const registrationOpen = (res: Response) => res.locals.filter?.('auth.registrationOpen', true) !== false;
+  const notice = (res: Response, status: number, heading: string, message: string, actions = [{ href: '/login', label: '返回登录', primary: true }]) =>
+    res.status(status).render('auth/notice', { layout: AUTH_LAYOUT, pageTitle: heading, heading, message, actions });
+  const icon = (item: SsoProvider) => item.icon && [...item.icon].length <= 2 ? `<span aria-hidden="true">${esc(item.icon)}</span>` : '';
 
-export default async function oidcSso(context: Context): Promise<void> {
-  const { web, db, admin } = context.linearpress;
-  const database = context.databaseService as unknown as SsoDb;
-  const plugins = context.plugins;
-  const users = context.users;
+  /* ---------- buttons on the sign-in and registration pages ---------- */
+  ui.slot('auth.login.after', {
+    match: () => ready().length > 0,
+    render: ({ req }) => `<div class="stack sso-buttons" data-lp-plugin="${PLUGIN_ID}">${ready().map((item) => `<a class="btn btn-block" href="/sso/login/${encodeURIComponent(item.id)}${req.query.next ? `?next=${encodeURIComponent(String(req.query.next))}` : ''}">${icon(item)}使用 ${esc(item.name)} 登录</a>`).join('')}</div>`
+  });
+  ui.slot('auth.register.after', {
+    match: () => ready().length > 0 && config.autoRegister,
+    render: () => `<div class="stack sso-buttons" data-lp-plugin="${PLUGIN_ID}"><div class="auth-divider">或者</div>${ready().map((item) => `<a class="btn btn-block" href="/sso/login/${encodeURIComponent(item.id)}">${icon(item)}使用 ${esc(item.name)} 注册</a>`).join('')}</div>`
+  });
 
-  await ensureSchema(database);
-  let config: SsoConfig = loadConfig(plugins);
-  const reloadConfig = (): void => { config = loadConfig(plugins); };
-
-  const readyProvider = (id: string): SsoProvider | undefined => {
-    const provider = config.providers.find((item) => item.id === id);
-    return provider && providerReady(provider) ? provider : undefined;
-  };
-  const originOf = (req: Request): string => `${req.protocol}://${req.get('host')}`;
-  const redirectUriFor = (req: Request): string => `${originOf(req)}${config.callbackPath}`;
-
-  admin.registerMenu({ title: '单点登录', link: SETTINGS_URL, icon: '🔐' });
-
-  // ---------------------------------------------------------------- 公开接口
-
-  web.register('get', '/sso/providers', wrapJson(async (_req, res) => {
-    res.json({
-      ok: true,
-      autoRegister: config.autoRegister,
-      providers: config.providers.filter(providerReady).map((provider) => ({ id: provider.id, name: provider.name, icon: provider.icon }))
-    });
-  }));
-
-  // 发起单点登录：GET /sso/login/:provider?redirect=/站点内路径
-  web.register('get', `${LOGIN_START_PREFIX}:provider`, wrap(async (req, res) => {
-    const provider = readyProvider(param(req.params.provider));
-    if (!provider) {
-      return void res.status(400).render('auth/login', { title: '登录', error: '该认证平台不存在或未配置完成。' });
-    }
+  /* ---------- start ---------- */
+  const start = (req: Request, res: Response, item: SsoProvider, intent: 'login' | 'bind', next: string) => {
     const state = randomState();
-    const pkce = provider.usePkce ? generatePkce() : undefined;
-    req.session.ssoPending = {
-      state,
-      provider: provider.id,
-      intent: 'login',
-      returnTo: safeReturnPath(req.query.redirect) ?? '/admin',
-      verifier: pkce?.verifier,
-      exp: Date.now() + STATE_TTL_MS
-    };
-    res.redirect(buildAuthorizeUrl(provider, redirectUriFor(req), state, pkce?.challenge));
-  }));
+    const pkce = item.usePkce ? generatePkce() : undefined;
+    req.session.ssoPending = { state, provider: item.id, intent, next, verifier: pkce?.verifier, exp: Date.now() + TTL };
+    res.redirect(buildAuthorizeUrl(item, `${origin(req)}${config.callbackPath}`, state, pkce?.challenge));
+  };
+  web.register('get', '/sso/login/:provider', (req, res) => {
+    const item = provider(String(req.params.provider));
+    if (!item) return void notice(res, 404, '无法使用这个登录方式', '这个登录方式不存在或还没有配置完成。');
+    if (req.session.userId) return void res.redirect(safeNext(req.query.next, '/'));
+    start(req, res, item, 'login', safeNext(req.query.next));
+  });
+  web.register('post', '/sso/connect/:provider', requireAuth, (req, res) => {
+    const item = provider(String(req.params.provider));
+    if (!item) { req.flash('danger', '这个登录方式不存在或还没有配置完成。'); return void res.redirect(303, ACCOUNT); }
+    start(req, res, item, 'bind', ACCOUNT);
+  });
 
-  // 回调：GET <callbackPath>（默认 /sso-callback；可配置，保存后重启生效）
-  web.register('get', config.callbackPath, wrap(async (req, res) => {
+  /* ---------- callback (path is read per request, so changing it needs no restart) ---------- */
+  web.middleware((req, res, next) => {
+    if (req.method !== 'GET' || req.path !== config.callbackPath) return next();
+    void callback(req, res).catch((error) => {
+      ctx.logger.warn('sso callback failed:', messageOf(error));
+      if (!res.headersSent) notice(res, 502, '登录没有完成', `认证平台返回了错误：${messageOf(error)}。请稍后重试，或改用账号密码登录。`);
+    });
+  });
+  async function callback(req: Request, res: Response) {
     const pending = req.session.ssoPending;
     req.session.ssoPending = undefined;
-    if (text(req.query.error)) {
-      return void res.status(400).render('error', { title: '单点登录已取消', message: '你在认证平台取消或拒绝了授权。' });
-    }
-    const state = param(req.query.state);
-    const code = param(req.query.code);
-    if (!pending || !pending.state || pending.state !== state || Date.now() > pending.exp) {
-      return void res.status(400).render('error', { title: '登录状态已失效', message: '单点登录状态已过期或与请求不匹配，请重新发起登录。' });
-    }
-    const provider = readyProvider(pending.provider);
-    if (!provider) {
-      return void res.status(400).render('error', { title: '认证平台不可用', message: '该认证平台已被删除或停用，请联系管理员。' });
-    }
-    // 换取令牌并获取用户信息
-    const token = await exchangeCode(provider, code, redirectUriFor(req), pending.verifier);
-    const info = await fetchUserInfo(provider, String(token.access_token ?? ''));
-    const identity = extractIdentity(provider, info);
-
-    if (pending.intent === 'bind') return void (await handleBindCallback(req, res, provider, identity, pending.returnTo ?? '/admin'));
-    await handleLoginCallback(req, res, provider, identity, pending.returnTo ?? '/admin');
-  }));
-
-  // 未注册用户确认创建账户页：GET /sso/create（会话中需存在 ssoCreatePending）
-  web.register('get', '/sso/create', wrap(async (req, res) => {
-    const pending = req.session.ssoCreatePending;
-    if (!pending || Date.now() > pending.exp) return void res.redirect('/login');
-    if (!config.autoRegister) return void res.redirect('/login');
-    const provider = config.providers.find((item) => item.id === pending.provider);
-    if (!provider) return void res.redirect('/login');
-    const base = safeUsername(pending.username);
-    const username = await resolveUsername(async (name) => Promise.resolve(users.findByUsername(name)).then(Boolean), base, pending.sub);
-    res.render('web/sso-create', {
-      title: '创建账户',
-      providerName: provider.name,
-      providerIcon: provider.icon,
-      subTail: String(pending.sub).slice(-4) || '****',
-      username,
-      email: pending.email ?? ''
-    });
-  }));
-
-  // 确认创建（一次性）：POST /sso/confirm-create
-  web.register('post', '/sso/confirm-create', wrap(async (req, res) => {
-    const pending = req.session.ssoCreatePending;
-    req.session.ssoCreatePending = undefined;
-    if (!pending || Date.now() > pending.exp) {
-      return void res.status(400).render('error', { title: '创建会话已失效', message: '创建账户的确认页已过期，请重新发起单点登录。' });
-    }
-    reloadConfig();
-    if (!config.autoRegister) {
-      return void res.status(400).render('error', { title: '自动注册已关闭', message: '站点已关闭自动注册，无法创建新账户。请联系管理员将你的平台账号绑定到已有账户。' });
-    }
-    // 回调与确认之间可能已被其他请求绑定
-    let existing = await findBinding(database, pending.provider, pending.sub);
-    let user = existing ? await Promise.resolve(users.findById(existing.user_id)) : undefined;
-    if (!user) {
-      const base = safeUsername(pending.username);
-      const username = await resolveUsername(async (name) => Promise.resolve(users.findByUsername(name)).then(Boolean), base, pending.sub);
-      const password = randomPassword();
-      try {
-        user = await users.register(username, pending.email || null, password);
-      } catch (error) {
-        // 邮箱可能已被占用：退回无邮箱注册；仍失败则按并发冲突处理或上抛。
-        try { user = await users.register(username, null, password); }
-        catch { throw error; }
-      }
-      try {
-        await createBinding(database, { provider: pending.provider, sub: pending.sub, userId: user.id, username, email: pending.email || null });
-      } catch (error) {
-        const raced = await findBinding(database, pending.provider, pending.sub);
-        if (raced) { const other = await Promise.resolve(users.findById(raced.user_id)); if (other) user = other; else throw error; }
-        else throw error;
-      }
-    }
-    if (!user) throw new Error('无法创建或定位站点账户');
-    await regenerateSession(req.session);
-    req.session.userId = user.id;
-    res.redirect('/admin');
-  }));
-
-  // ---------------------------------------------------------------- 授权接口
-
-  web.register('get', '/sso/bindings', requireAuth, wrapJson(async (req, res) => {
-    const userId = req.session.userId!;
-    const bindings = await listBindingsByUser(database, userId);
-    const meta = new Map(config.providers.filter(providerReady).map((provider) => [provider.id, provider]));
-    res.json({
-      ok: true,
-      providers: [...meta.values()].map((provider) => ({ id: provider.id, name: provider.name, icon: provider.icon })),
-      bindings: bindings.map((binding) => ({
-        provider: binding.provider,
-        providerName: meta.get(binding.provider)?.name ?? binding.provider,
-        icon: meta.get(binding.provider)?.icon,
-        username: binding.username,
-        email: binding.email,
-        subTail: String(binding.sub).slice(-4) || '****',
-        createdAt: binding.created_at
-      }))
-    });
-  }));
-
-  // 发起绑定：POST /sso/connect/:provider （body.return_to 站内路径）
-  web.register('post', `${CONNECT_PREFIX}:provider`, requireAuth, wrapJson(async (req, res) => {
-    const provider = readyProvider(param(req.params.provider));
-    if (!provider) return void res.status(400).json({ ok: false, message: '该认证平台不存在或未配置完成。' });
-    const state = randomState();
-    const pkce = provider.usePkce ? generatePkce() : undefined;
-    req.session.ssoPending = {
-      state,
-      provider: provider.id,
-      intent: 'bind',
-      returnTo: safeReturnPath(req.body.return_to) ?? '/admin',
-      verifier: pkce?.verifier,
-      exp: Date.now() + STATE_TTL_MS
-    };
-    res.redirect(buildAuthorizeUrl(provider, redirectUriFor(req), state, pkce?.challenge));
-  }));
-
-  // 解绑：POST /sso/disconnect/:provider
-  web.register('post', `${DISCONNECT_PREFIX}:provider`, requireAuth, wrapJson(async (req, res) => {
-    const providerId = param(req.params.provider);
-    const bindings = await listBindingsByUser(database, req.session.userId!);
-    if (!bindings.some((binding) => binding.provider === providerId)) {
-      return void res.status(400).json({ ok: false, message: '该平台账号未绑定在当前账户下。' });
-    }
-    await removeBindingByUserAndProvider(database, req.session.userId!, providerId);
-    res.json({ ok: true, redirect: safeReturnPath(req.body.return_to) ?? '/admin' });
-  }));
-
-  // ---------------------------------------------------------------- 设置页
-
-  const manage = [requireAuth, checkPermission(MANAGE_PERMISSION)];
-  const redirectWithNotice = (res: Response, message: string) => res.redirect(`${SETTINGS_URL}?notice=${encodeURIComponent(message)}`);
-
-  web.register('get', SETTINGS_URL, ...manage, wrap(async (req, res) => {
-    res.render('admin/oidc-sso-settings', {
-      title: 'OIDC 单点登录',
-      config,
-      providersJson: config.providers.length ? JSON.stringify(config.providers, null, 2) : exampleProvidersJson(),
-      callbackOrigin: originOf(req),
-      notice: text(req.query.notice)
-    });
-  }));
-
-  web.register('post', `${SETTINGS_URL}/save`, ...manage, wrap(async (req, res) => {
-    try {
-      const next = parseSettingsForm(req.body as Record<string, unknown>);
-      const errors = validateConfig(next);
-      if (errors.length) return void redirectWithNotice(res, `保存失败：${errors.join('；')}`);
-      const changed = next.callbackPath !== config.callbackPath;
-      saveConfig(plugins, next);
-      reloadConfig();
-      redirectWithNotice(res, `设置已保存。${changed ? '回调路径已变更，请重启站点后生效。' : ''}`);
-    } catch (error) {
-      redirectWithNotice(res, `保存失败：${messageOf(error)}`);
-    }
-  }));
-
-  web.register('post', `${SETTINGS_URL}/discovery`, ...manage, wrapJson(async (req, res) => {
-    const discoveryUrl = text(req.body.discovery_url);
-    if (!/^https?:\/\//i.test(discoveryUrl)) return void res.status(400).json({ ok: false, message: '请输入 Discovery 文档地址（https://.../.well-known/openid-configuration）' });
-    const provider = await discoverOpenIdProvider(discoveryUrl, {
-      name: text(req.body.name),
-      clientId: text(req.body.client_id),
-      clientSecret: text(req.body.client_secret),
-      icon: text(req.body.icon)
-    });
-    res.json({ ok: true, provider });
-  }));
-
-  web.viewDir('views');
-  context.logger.info('activated');
-
-  // ---------------------------------------------------------------- 内部实现
-
-  /** 绑定意图回调：仅对当前登录用户写入绑定关系。 */
-  async function handleBindCallback(req: Request, res: Response, provider: SsoProvider, identity: SsoIdentity, returnTo: string): Promise<void> {
-    if (!req.session.userId) {
-      return void res.status(401).render('error', { title: '请先登录', message: '绑定需要在登录状态下进行，请先登录后再绑定此平台账号。' });
-    }
-    const existing = await findBinding(database, provider.id, identity.sub);
-    if (existing) {
-      if (existing.user_id !== req.session.userId) {
-        return void res.status(409).render('error', { title: '绑定失败', message: `该平台账号已绑定到其他账户（${provider.name}），无法重复绑定。` });
-      }
-      await refreshBindingSnapshot(database, provider.id, identity.sub, identity.username || existing.username, identity.email ?? existing.email);
-    } else {
-      await createBinding(database, { provider: provider.id, sub: identity.sub, userId: req.session.userId, username: identity.username || null, email: identity.email });
-    }
-    res.redirect(returnTo);
-  }
-
-  /** 登录意图回调：已绑定 → 直接登录；未绑定 → 询问是否创建（关闭自动注册则不再询问）。 */
-  async function handleLoginCallback(req: Request, res: Response, provider: SsoProvider, identity: SsoIdentity, returnTo: string): Promise<void> {
-    const binding = await findBinding(database, provider.id, identity.sub);
-    let user = binding ? await Promise.resolve(users.findById(binding.user_id)) : undefined;
+    if (text(req.query.error)) return void notice(res, 400, '已取消', '你在认证平台取消了授权。', [{ href: pending?.intent === 'bind' ? ACCOUNT : '/login', label: '返回', primary: true }]);
+    if (!pending || pending.state !== text(req.query.state) || Date.now() > pending.exp) return void notice(res, 400, '登录已过期', '这次登录已经过期或不是从本站发起的，请重新开始。');
+    const item = provider(pending.provider);
+    if (!item) return void notice(res, 400, '登录方式已停用', '这个登录方式刚刚被停用了。');
+    const token = await exchangeCode(item, text(req.query.code), `${origin(req)}${config.callbackPath}`, pending.verifier);
+    const identity = extractIdentity(item, await fetchUserInfo(item, String(token.access_token ?? '')));
+    if (pending.intent === 'bind') return void bind(req, res, item, identity);
+    const binding = await findBinding(db(), item.id, identity.sub);
+    const user = binding ? await ctx.users.findById(Number(binding.user_id)) : undefined;
     if (user) {
-      await refreshBindingSnapshot(database, provider.id, identity.sub, identity.username || binding!.username, identity.email ?? binding!.email);
-    } else if (config.autoRegister) {
-      // 未绑定且开放自动注册：询问用户是否创建（不静默注册）。
-      req.session.ssoCreatePending = {
-        provider: provider.id,
-        sub: identity.sub,
-        username: identity.username || 'user',
-        email: identity.email,
-        exp: Date.now() + STATE_TTL_MS
-      };
+      await refreshBinding(db(), item.id, identity.sub, identity.username || binding!.username, identity.email ?? binding!.email);
+      return void signIn(req, res, user, pending.next, item);
+    }
+    if (config.autoRegister && registrationOpen(res)) {
+      req.session.ssoCreate = { provider: item.id, sub: identity.sub, username: identity.username || 'user', email: identity.email, next: pending.next, exp: Date.now() + TTL };
       return void res.redirect('/sso/create');
-    } else {
-      return void res.status(403).render('error', {
-        title: '账号未绑定',
-        message: `该平台账号（${provider.name}）未绑定任何站点账户，且站点已关闭自动注册，无法登录。请联系管理员将你的平台账号绑定到已有账户，或改用账号密码登录。`
-      });
     }
-    if (!user) {
-      return void res.status(400).render('error', { title: '登录失败', message: '绑定的站点账户不存在或已被删除。' });
-    }
-    // 标准登录态：regenerate 防会话固定；不标记 easy2faPassed，
-    // 需要两步验证的用户由 easy-2fa 强制中间件自动转入挑战/绑定页。
-    await regenerateSession(req.session);
-    req.session.userId = user.id;
-    res.redirect(returnTo);
+    notice(res, 403, '这个账号还没有关联', `你的 ${item.name} 账号还没有关联到本站账号。请先用账号密码登录，然后在“关联账号”页面关联。`);
   }
+  async function signIn(req: Request, res: Response, user: import('linearpress/plugin-api').User, next: string, item: SsoProvider) {
+    const denied = await auth.beginLogin(req, res, user, { next, method: `sso:${item.id}` });
+    if (denied) notice(res, denied.status ?? 403, '无法登录', denied.deny);
+  }
+  async function bind(req: Request, res: Response, item: SsoProvider, identity: SsoIdentity) {
+    if (!req.session.userId) return void notice(res, 401, '请先登录', '关联账号需要先登录本站。');
+    const existing = await findBinding(db(), item.id, identity.sub);
+    if (existing && Number(existing.user_id) !== req.session.userId) req.flash('danger', `这个 ${item.name} 账号已经关联了本站的另一个账号。`);
+    else if (existing) { await refreshBinding(db(), item.id, identity.sub, identity.username || existing.username, identity.email ?? existing.email); req.flash('success', `${item.name} 账号已经是关联状态。`); }
+    else if ((await bindingsOf(db(), req.session.userId)).some((row) => row.provider === item.id)) req.flash('warning', `你已经关联了另一个 ${item.name} 账号，请先解除。`);
+    else { await createBinding(db(), { provider: item.id, sub: identity.sub, userId: req.session.userId, username: identity.username || null, email: identity.email, now: utcNow() }); req.flash('success', `已关联 ${item.name} 账号${identity.username ? ` ${identity.username}` : ''}。`); }
+    res.redirect(303, ACCOUNT);
+  }
+
+  /* ---------- create an account after confirmation ---------- */
+  const taken = async (name: string) => Boolean(await ctx.users.findByUsername(name));
+  web.register('get', '/sso/create', route(async (req, res) => {
+    const pending = req.session.ssoCreate;
+    const item = pending && Date.now() < pending.exp ? provider(pending.provider) : undefined;
+    if (!pending || !item || !config.autoRegister || !registrationOpen(res)) return void res.redirect('/login');
+    res.render(`${PLUGIN_ID}/create`, { layout: AUTH_LAYOUT, pageTitle: '创建账号', providerName: item.name, username: await resolveUsername(taken, safeUsername(pending.username), pending.sub), email: pending.email });
+  }));
+  web.register('post', '/sso/create', route(async (req, res) => {
+    const pending = req.session.ssoCreate;
+    req.session.ssoCreate = undefined;
+    const item = pending && Date.now() < pending.exp ? provider(pending.provider) : undefined;
+    if (!pending || !item || !config.autoRegister || !registrationOpen(res)) return void notice(res, 400, '页面已过期', '请重新用第三方账号登录。');
+    const raced = await findBinding(db(), item.id, pending.sub);
+    let user = raced ? await ctx.users.findById(Number(raced.user_id)) : undefined;
+    if (!user) {
+      const username = await resolveUsername(taken, safeUsername(pending.username), pending.sub);
+      const password = randomBytes(24).toString('base64url');
+      const emailFree = pending.email && !await ctx.users.findByEmail(pending.email);
+      user = await ctx.users.register(username, emailFree ? pending.email : null, password);
+      await createBinding(db(), { provider: item.id, sub: pending.sub, userId: user.id, username: pending.username, email: pending.email, createdAccount: true, now: utcNow() });
+      req.flash('success', `欢迎，${user.username}！账号已创建并关联 ${item.name}。`);
+    }
+    await signIn(req, res, user, pending.next, item);
+  }));
+
+  /* ---------- the user's connections ---------- */
+  ui.menu('user.menu', { title: '关联账号', href: ACCOUNT, order: 82, when: () => ready().length > 0 });
+  web.register('get', ACCOUNT, requireAuth, route(async (req, res) => {
+    const rows = await bindingsOf(db(), req.session.userId!);
+    res.render(`${PLUGIN_ID}/account`, { pageTitle: '关联账号', providers: ready().map((item) => ({ item, binding: rows.find((row) => row.provider === item.id) })), orphan: rows.filter((row) => !provider(row.provider)) });
+  }));
+  web.register('post', `${ACCOUNT}/:provider/delete`, requireAuth, route(async (req, res) => {
+    const rows = await bindingsOf(db(), req.session.userId!);
+    const row = rows.find((item) => item.provider === String(req.params.provider));
+    if (!row) req.flash('warning', '没有找到这个关联。');
+    else if (row.created_account && rows.length === 1) req.flash('danger', '这是你登录本站的唯一方式（账号是通过它创建的，没有设置过密码）。请先请管理员为你设置密码，或关联另一个登录方式。');
+    else { await removeBinding(db(), req.session.userId!, row.provider); req.flash('success', '已解除关联。'); }
+    res.redirect(303, ACCOUNT);
+  }));
+  web.register('get', '/sso/bindings', (_req, res) => res.redirect(301, ACCOUNT));
+
+  /* ---------- admin ---------- */
+  admin.registerMenu({ title: '单点登录', link: ADMIN, group: 'users', order: 40, permission: 'plugin:manage' });
+  admin.registerSettings({ label: '单点登录', link: ADMIN, description: '用第三方账号（OIDC / OAuth2）登录' });
+  web.register('get', '/admin/oidc-sso/settings', (_req, res) => res.redirect(301, ADMIN));
+  const manage = [requireAuth, checkPermission('plugin:manage')];
+  web.register('get', ADMIN, ...manage, route(async (req, res) => {
+    res.render(`${PLUGIN_ID}/admin`, { pageTitle: '单点登录', config, counts: await countByProvider(db()), callbackUrl: `${origin(req)}${config.callbackPath}`, ready: providerReady });
+  }));
+  web.register('post', `${ADMIN}/settings`, ...manage, route(async (req, res) => {
+    const path = normalizeCallbackPath(req.body.callbackPath);
+    if (!/^\/[\w\-/]{1,80}$/.test(path) || ['/login', '/admin', '/register', '/sso'].some((p) => path === p || path.startsWith(`${p}/`))) { req.flash('danger', '回调路径只能包含字母、数字、短横线和斜杠，并且不能和系统地址重复。'); return void res.redirect(303, ADMIN); }
+    config = { ...config, autoRegister: req.body.autoRegister === 'on', callbackPath: path };
+    await save();
+    req.flash('success', '已保存，立即生效。如果改了回调路径，记得同步修改认证平台里的回调地址。');
+    res.redirect(303, ADMIN);
+  }));
+  const renderProvider = (res: Response, item: Partial<SsoProvider> & { isNew: boolean }, errors: Record<string, string> = {}, status = 200) =>
+    res.status(status).render(`${PLUGIN_ID}/provider`, { pageTitle: item.isNew ? '添加登录方式' : `编辑 ${item.name}`, crumbs: [{ title: '单点登录', href: ADMIN }], item, errors, hasSecret: Boolean(item.clientSecret), callbackUrl: `${origin(res.req)}${config.callbackPath}` });
+  web.register('get', `${ADMIN}/providers/:id`, ...manage, (req, res) => {
+    const item = config.providers.find((p) => p.id === String(req.params.id));
+    if (!item) return void res.redirect(303, ADMIN);
+    renderProvider(res, { ...item, isNew: false });
+  });
+  // Registered after /providers/:id on purpose: later routes match first, so the literal path must come last.
+  web.register('get', `${ADMIN}/providers/new`, ...manage, (_req, res) => renderProvider(res, { isNew: true, enabled: true, type: 'oidc', scope: 'openid profile email', idField: 'sub', usernameField: 'preferred_username', emailField: 'email', usePkce: true }));
+  web.register('post', `${ADMIN}/providers`, ...manage, route(async (req, res) => {
+    const existing = config.providers.find((p) => p.id === text(req.body.originalId));
+    const item = parseProviderForm(req.body ?? {}, existing);
+    const errors = providerErrors(item);
+    if (!existing && config.providers.some((p) => p.id === item.id)) errors.id = '这个标识已经被使用';
+    if (Object.keys(errors).length) return void renderProvider(res, { ...item, clientSecret: existing?.clientSecret ?? '', isNew: !existing }, errors, 400);
+    config = { ...config, providers: existing ? config.providers.map((p) => (p.id === existing.id ? item : p)) : [...config.providers, item] };
+    await save();
+    req.flash('success', `已保存「${item.name}」${item.enabled ? '，登录页上会出现它的按钮' : '（已停用）'}。`);
+    res.redirect(303, ADMIN);
+  }));
+  web.register('post', `${ADMIN}/providers/:id/delete`, ...manage, route(async (req, res) => {
+    const item = config.providers.find((p) => p.id === String(req.params.id));
+    config = { ...config, providers: config.providers.filter((p) => p.id !== String(req.params.id)) };
+    await save();
+    req.flash('success', item ? `已删除「${item.name}」。已有的关联会保留，用同样的标识重新添加后即可恢复。` : '已删除。');
+    res.redirect(303, ADMIN);
+  }));
+  web.register('post', `${ADMIN}/discovery`, ...manage, route(async (req, res) => {
+    const url = text(req.body.url);
+    if (!/^https?:\/\//i.test(url)) return void res.status(400).json({ ok: false, message: '请输入 Discovery 地址，例如 https://idp.example.com/.well-known/openid-configuration' });
+    try { res.json({ ok: true, provider: await discoverOpenIdProvider(url, { name: text(req.body.name) }) }); }
+    catch (error) { res.status(400).json({ ok: false, message: messageOf(error) }); }
+  }));
+
+  ctx.logger.info(`activated (${ready().length} providers ready)`);
 }

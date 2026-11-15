@@ -1,0 +1,65 @@
+<%#
+  OIDC SSO · add or edit one provider, with OpenID Connect discovery.
+
+  Authors:
+  MoyuZJ <moyuzj@evarentha.com> @LinearTeam - Made in China with ♥
+  worryzu <worryzu@evarentha.com> @LinearTeam
+
+  Copyright (C) 2026 Evarentha
+  SPDX-License-Identifier: GPL-3.0-or-later
+%><% const f = { values: item, errors }; %>
+<div class="stack" data-lp-plugin="oidc-sso">
+  <div class="page-header"><div><h1><%= item.isNew ? '添加登录方式' : `编辑 ${item.name}` %></h1><p>在认证平台创建应用，回调地址填 <code><%= callbackUrl %></code> <button type="button" class="btn btn-sm btn-ghost" data-copy="<%= callbackUrl %>">复制</button></p></div></div>
+
+  <% if (item.isNew) { %>
+  <section class="card stack" data-sso-discovery>
+    <h2 class="section-title">自动填写（OpenID Connect）</h2>
+    <p class="help">输入平台的 Discovery 地址，自动填好下面的端点。</p>
+    <div class="cluster sso-discover"><input class="input" type="url" placeholder="https://idp.example.com/.well-known/openid-configuration" aria-label="Discovery 地址" data-sso-url><button class="btn" type="button" data-sso-discover>读取</button><span class="muted" role="status" data-sso-status></span></div>
+  </section>
+  <% } %>
+
+  <form class="stack" method="post" action="/admin/sso/providers" data-dirty-guard data-sso-form>
+    <input type="hidden" name="originalId" value="<%= item.isNew ? '' : item.id %>">
+    <section class="card stack">
+      <div class="form-row">
+        <%- include('partials/field', { form: f, name: 'name', label: '按钮上显示的名称', required: true, placeholder: '例如：公司账号', attrs: 'maxlength="40"' }) %>
+        <%- include('partials/field', { form: f, name: 'id', label: '标识', required: true, help: item.isNew ? '小写字母、数字和短横线，保存后不能修改' : '保存后不能修改', attrs: item.isNew ? 'pattern="[a-z0-9][a-z0-9-]*" maxlength="40" spellcheck="false"' : 'disabled' }) %>
+        <%- include('partials/field', { form: f, name: 'icon', label: '图标（可选）', placeholder: '一个 emoji', attrs: 'maxlength="2"' }) %>
+      </div>
+      <label class="check"><input type="checkbox" name="enabled"<%= item.enabled ? ' checked' : '' %>><span>启用（在登录页显示）</span></label>
+    </section>
+    <section class="card stack">
+      <h2 class="section-title">应用凭据</h2>
+      <div class="form-row">
+        <%- include('partials/field', { form: f, name: 'clientId', label: 'Client ID', attrs: 'spellcheck="false" autocomplete="off"' }) %>
+        <div class="field<%= errors.clientSecret ? ' has-error' : '' %>">
+          <label for="f-clientSecret">Client Secret</label>
+          <input class="input" id="f-clientSecret" name="clientSecret" type="password" autocomplete="new-password" placeholder="<%= hasSecret ? '已保存，留空保持不变' : '' %>">
+          <% if (errors.clientSecret) { %><p class="error"><%= errors.clientSecret %></p><% } %>
+          <% if (hasSecret) { %><label class="check"><input type="checkbox" name="clearSecret"><span>清除已保存的 Secret</span></label><% } %>
+        </div>
+      </div>
+      <div class="form-row">
+        <%- include('partials/field', { form: f, name: 'type', label: '协议', type: 'select', options: [{ value: 'oidc', label: 'OpenID Connect' }, { value: 'oauth2', label: 'OAuth2' }] }) %>
+        <%- include('partials/field', { form: f, name: 'scope', label: 'Scope', attrs: 'spellcheck="false"' }) %>
+      </div>
+      <label class="check"><input type="checkbox" name="usePkce"<%= item.usePkce ? ' checked' : '' %>><span>使用 PKCE（推荐，平台支持时开启）</span></label>
+    </section>
+    <section class="card stack">
+      <h2 class="section-title">端点</h2>
+      <%- include('partials/field', { form: f, name: 'authorizeUrl', label: '授权地址（authorization endpoint）', type: 'url', attrs: 'spellcheck="false"' }) %>
+      <%- include('partials/field', { form: f, name: 'tokenUrl', label: '令牌地址（token endpoint）', type: 'url', attrs: 'spellcheck="false"' }) %>
+      <%- include('partials/field', { form: f, name: 'userInfoUrl', label: '用户信息地址（userinfo endpoint）', type: 'url', attrs: 'spellcheck="false"' }) %>
+    </section>
+    <details class="card">
+      <summary>用户信息字段（一般不用改）</summary>
+      <div class="form-row sso-fields">
+        <%- include('partials/field', { form: f, name: 'idField', label: '唯一标识字段', help: 'OIDC 为 sub，GitHub 为 id' }) %>
+        <%- include('partials/field', { form: f, name: 'usernameField', label: '用户名字段' }) %>
+        <%- include('partials/field', { form: f, name: 'emailField', label: '邮箱字段' }) %>
+      </div>
+    </details>
+    <div class="cluster"><button class="btn btn-primary" type="submit">保存</button><a class="btn btn-ghost" href="/admin/sso">取消</a></div>
+  </form>
+</div>

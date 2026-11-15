@@ -1,0 +1,43 @@
+<%#
+  OIDC SSO · admin overview: providers and general settings.
+
+  Authors:
+  MoyuZJ <moyuzj@evarentha.com> @LinearTeam - Made in China with ♥
+  worryzu <worryzu@evarentha.com> @LinearTeam
+
+  Copyright (C) 2026 Evarentha
+  SPDX-License-Identifier: GPL-3.0-or-later
+%><div class="stack" data-lp-plugin="oidc-sso">
+  <div class="page-header">
+    <div><h1>单点登录</h1><p>让用户用企业或第三方账号（OpenID Connect / OAuth2）登录。两步验证等登录检查同样生效。</p></div>
+    <div class="actions"><a class="btn btn-primary" href="/admin/sso/providers/new"><%- include('partials/icon', { name: 'plus', size: 16 }) %>添加登录方式</a></div>
+  </div>
+
+  <% if (config.providers.length) { %>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>登录方式</th><th>状态</th><th class="col-num">已关联用户</th><th class="col-actions"><span class="visually-hidden">操作</span></th></tr></thead>
+    <tbody><% for (const item of config.providers) { %><tr>
+      <td><a class="row-title" href="/admin/sso/providers/<%= encodeURIComponent(item.id) %>"><%= item.name %></a><div class="row-sub"><%= item.id %> · <%= item.type === 'oidc' ? 'OpenID Connect' : 'OAuth2' %></div></td>
+      <td><% if (ready(item)) { %><span class="badge badge-published">已启用</span><% } else if (!item.enabled) { %><span class="badge badge-draft">已停用</span><% } else { %><span class="badge badge-pending">配置不完整</span><% } %></td>
+      <td class="col-num"><%= counts.get(item.id) || 0 %></td>
+      <td class="col-actions"><div class="row-actions">
+        <a href="/admin/sso/providers/<%= encodeURIComponent(item.id) %>">编辑</a>
+        <form method="post" action="/admin/sso/providers/<%= encodeURIComponent(item.id) %>/delete" data-confirm="删除「<%= item.name %>」后，<%= counts.get(item.id) || 0 %> 个关联用户将不能再用它登录。" data-confirm-title="删除登录方式" data-confirm-text="删除" data-confirm-danger><button class="btn-link" type="submit" style="color:var(--lp-danger)">删除</button></form>
+      </div></td>
+    </tr><% } %></tbody>
+  </table></div>
+  <% } else { %>
+  <div class="card"><%- include('partials/empty', { title: '还没有登录方式', text: '添加一个 OpenID Connect 或 OAuth2 认证平台，例如 Keycloak、Authing、GitHub。', icon: 'user', action: { href: '/admin/sso/providers/new', label: '添加登录方式' } }) %></div>
+  <% } %>
+
+  <form class="card stack" method="post" action="/admin/sso/settings" data-dirty-guard>
+    <h2 class="section-title">通用设置</h2>
+    <div class="field">
+      <label for="sso-callback">回调路径</label>
+      <input class="input" id="sso-callback" name="callbackPath" value="<%= config.callbackPath %>" spellcheck="false">
+      <p class="help">在认证平台填写的回调地址：<code><%= callbackUrl %></code> <button type="button" class="btn btn-sm btn-ghost" data-copy="<%= callbackUrl %>">复制</button></p>
+    </div>
+    <label class="check"><input type="checkbox" name="autoRegister"<%= config.autoRegister ? ' checked' : '' %>><span>允许没有本站账号的人直接用第三方账号注册<small>需要站点开放注册。用户会先看到确认页，不会悄悄创建账号。关闭后只有已关联的账号能用第三方登录。</small></span></label>
+    <div><button class="btn" type="submit">保存</button></div>
+  </form>
+</div>
